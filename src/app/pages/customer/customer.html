@@ -1,0 +1,42 @@
+<div class="grid2">
+  <section class="card">
+    <h2>จัดการข้อมูลลูกค้า</h2>
+    @if (error()) { <p class="err">{{ error() }}</p> }
+    @if (loading()) { <p class="muted">กำลังโหลด... Render แบบฟรีอาจใช้เวลาปลุกเซิร์ฟเวอร์ประมาณ 1 นาที</p> }
+    <div class="form2">
+      <input placeholder="ชื่อลูกค้า" [value]="name()" (input)="name.set(v($event))">
+      <input placeholder="เบอร์โทร" [value]="phone()" (input)="phone.set(v($event))">
+      <input placeholder="ละติจูด" [value]="lat()" (input)="lat.set(v($event)); drawPick()">
+      <input placeholder="ลองจิจูด" [value]="lng()" (input)="lng.set(v($event)); drawPick()">
+    </div>
+    <button class="btn" (click)="add()" [disabled]="!valid() || busy()">+ เพิ่มลูกค้า</button>
+    <p class="hint">💡 คลิกบนแผนที่เพื่อเลือกพิกัดบ้านลูกค้า (วงแดง) · ลากหมุด "ร้าน" เพื่อย้ายตำแหน่งร้าน</p>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>ชื่อ</th>
+            <th>เบอร์</th>
+            <th>พิกัด</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of rows(); track c.customer_id) {
+          <tr>
+            <td><input [value]="nm(c)" (change)="rename(c, $event)"></td>
+            <td><input [value]="c.phone_number" (change)="rephone(c, $event)"></td>
+            <td class="coord" (click)="show(c)">{{ coord(c) }}</td>
+            <td><button class="x" (click)="remove(c)" title="ลบลูกค้า">✕</button></td>
+          </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <h2>แผนที่บ้านลูกค้า (รัศมี 3 กม. รอบร้าน)</h2>
+    <div class="map" #mapEl></div>
+    <p class="hint">จุดส้ม = ลูกค้าที่มีออเดอร์วันนี้ · จุดเทา = ไม่มีออเดอร์</p>
+  </section>
+</div>

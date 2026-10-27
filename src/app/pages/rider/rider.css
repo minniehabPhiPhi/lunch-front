@@ -1,0 +1,12 @@
+.phone{max-width:380px;margin:0 auto;padding:18px 16px 22px;background:var(--bg);border:10px solid #231b15;border-radius:40px}
+.phone .code{width:100%;margin-bottom:10px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.chip{font:inherit;font-size:14px;padding:4px 12px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:999px;cursor:pointer}
+.chip.on{color:#fff;background:var(--org);border-color:var(--org)}
+.kpis.two{grid-template-columns:1fr 1fr;margin-top:0}
+.stops{list-style:none;margin:14px 0 0;padding:0}
+.stops li{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.stops li .num{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;color:#fff;background:var(--org);font:700 16px 'Noto Sans Thai',sans-serif;text-decoration:none;cursor:pointer;box-shadow:0 0 0 3px #fed7aa;transition:transform .1s}
+.stops li .num:hover{background:#c2410c}
+.stops li .num:active{transform:scale(.92)}
+.stops p{margin:0;color:var(--muted);font-size:14px}

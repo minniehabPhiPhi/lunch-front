@@ -1,0 +1,11 @@
+.grid2.route{margin-top:16px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid2.route .map{height:560px}
+.rt{padding:12px 14px;margin-bottom:10px;background:var(--bg);border-radius:12px;cursor:pointer}
+.rt:hover{outline:2px solid #fdba74}.rt.late{background:#fde8e6}
+.rt p{margin:2px 0}.rt small{color:var(--muted)}
+.rt-h{display:flex;align-items:center;gap:8px}
+.dot{width:12px;height:12px;border-radius:50%;flex:none}
+@media (max-width:860px){
+  .grid2.route .map{height:380px}
+}

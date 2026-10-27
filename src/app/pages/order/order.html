@@ -1,0 +1,49 @@
+<div class="grid2 orders">
+  <section class="card">
+    <h2>จัดการออเดอร์ / จำลองการสั่งซื้อ</h2>
+    @if (error()) { <p class="err">{{ error() }}</p> }
+    @if (loading()) { <p class="muted">กำลังโหลด... Render แบบฟรีอาจใช้เวลาปลุกเซิร์ฟเวอร์ประมาณ 1 นาที</p> }
+    <div class="form-row">
+      <select class="grow" (change)="cid.set(+$any($event.target).value)">
+        @for (c of customers(); track c.customer_id) { <option [value]="c.customer_id" [selected]="c.customer_id === cid()">{{ nm(c) }}</option> }
+      </select>
+      <select class="qty" (change)="qty.set(+$any($event.target).value)">
+        @for (n of opts; track n) { <option [value]="n" [selected]="n === qty()">{{ n }}</option> }
+      </select>
+      <button class="btn" (click)="add()" [disabled]="!cid() || busy()">+ เพิ่มออเดอร์</button>
+    </div>
+    <div class="form-row">
+      <button class="btn ghost" (click)="seed()" [disabled]="busy()">🎲 สุ่มออเดอร์จำลอง (20–30)</button>
+      <button class="btn ghost" (click)="clear()" [disabled]="busy() || !rows().length">ล้างทั้งหมด</button>
+    </div>
+    <p class="hint">ออเดอร์ละไม่เกิน {{ max }} กล่อง · ราคา {{ price }} บาท/กล่อง · ต้นทุน {{ cost }} บาท/กล่อง</p>
+  </section>
+  <section class="card">
+    <div class="kpis">
+      <div class="kpi"><span>ออเดอร์</span><b>{{ rows().length }}</b></div>
+      <div class="kpi"><span>ข้าวกล่อง</span><b>{{ boxes() }}</b></div>
+      <div class="kpi"><span>ยอดขาย</span><b>{{ baht(boxes() * price) }}</b></div>
+      <div class="kpi"><span>ไรเดอร์ที่ต้องใช้</span><b>{{ riders() }}</b></div>
+    </div>
+    <div class="scroll tall">
+      <table>
+        <thead><tr><th>#</th><th>ลูกค้า</th><th>กล่อง</th><th></th></tr></thead>
+        <tbody>
+          @for (o of rows(); track o.id; let i = $index) {
+            <tr>
+              <td>{{ i + 1 }}</td><td>{{ o.name }}</td>
+              <td>
+                <select class="mini" (change)="setQty(o, +$any($event.target).value)">
+                  @for (n of opts; track n) { <option [value]="n" [selected]="n === o.qty">{{ n }}</option> }
+                </select>
+              </td>
+              <td><button class="x" (click)="remove(o)" title="ลบออเดอร์">✕</button></td>
+            </tr>
+          } @empty {
+            @if (!loading()) { <tr><td colspan="4" class="muted">ยังไม่มีออเดอร์ กด "สุ่มออเดอร์จำลอง" เพื่อเริ่มทดสอบ</td></tr> }
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
