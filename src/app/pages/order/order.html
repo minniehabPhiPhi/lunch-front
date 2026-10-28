@@ -1,10 +1,10 @@
 <div class="card">
-  <h3 class="title">📋 จัดการออเดอร์ / จำลองการสั่งซื้อ</h3>
+  <h3 class="title">จัดการออเดอร์ / จำลองการสั่งซื้อ</h3>
   <p class="hint">ออเดอร์ละไม่เกิน {{ maxBoxes }} กล่อง · ราคา {{ boxPrice }} บาท/กล่อง · ต้นทุน {{ boxCost }} บาท/กล่อง</p>
 
   <div class="actions">
     <button class="btn-primary" [disabled]="loading()" (click)="generateOrders()">
-      🎲 สุ่มออเดอร์จำลอง (20-30 รายการ)
+      สุ่มออเดอร์จำลอง (20-30 รายการ)
     </button>
     <button class="btn-secondary" [disabled]="loading()" (click)="clearOrders()">
       ล้างทั้งหมด
@@ -12,15 +12,15 @@
   </div>
 
   @if (apiError()) {
-    <div class="error">⚠️ {{ apiError() }}</div>
+    <div class="error">{{ apiError() }}</div>
   }
   @if (loading()) {
-    <p class="note">⏳ กำลังติดต่อ backend...</p>
+    <p class="note">กำลังติดต่อ backend...</p>
   }
 
   <!-- เพิ่มออเดอร์เอง -->
   <div class="add-box">
-    <strong>➕ เพิ่มออเดอร์</strong>
+    <strong>เพิ่มออเดอร์</strong>
     <select [(ngModel)]="selectedCustomerId" [disabled]="availableCustomers().length === 0">
       <option [ngValue]="null">-- เลือกลูกค้า --</option>
       @for (c of availableCustomers(); track c.id) {
@@ -88,7 +88,7 @@
               </td>
               <td>{{ ord.time }}</td>
               <td><span class="badge">{{ ord.status }}</span></td>
-              <td><button class="btn-small btn-danger" (click)="removeOrder(ord)">🗑️ ลบ</button></td>
+              <td><button class="btn-small btn-danger" (click)="removeOrder(ord)">ลบ</button></td>
             </tr>
           }
         </tbody>

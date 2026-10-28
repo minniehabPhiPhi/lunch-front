@@ -1,33 +1,33 @@
 <div class="card">
-  <h3 class="title">🗺️ คำนวณจัดเส้นทางและแบ่งงานไรเดอร์</h3>
+  <h3 class="title">คำนวณจัดเส้นทางและแบ่งงานไรเดอร์</h3>
 
   <div class="toolbar">
     <button class="btn-primary" (click)="calculateRoutes()">
-      {{ plan() ? '🔄 ไม่ถูกใจ? คำนวณใหม่ (เสนอเส้นทางอื่น)' : '🚀 คำนวณจัดเส้นทางอัจฉริยะ' }}
+      {{ plan() ? 'ไม่ถูกใจ? คำนวณใหม่ (เสนอเส้นทางอื่น)' : 'คำนวณจัดเส้นทางอัจฉริยะ' }}
     </button>
     <small class="hint">*เงื่อนไข: ไม่เกิน {{ maxOrders }} จุด/คน, ส่งถึงมือไม่เกิน 12:30 น.</small>
   </div>
 
   @if (errorMsg()) {
-    <div class="error">⚠️ {{ errorMsg() }}</div>
+    <div class="error">{{ errorMsg() }}</div>
   }
   @if (apiError()) {
-    <div class="error">⚠️ {{ apiError() }}</div>
+    <div class="error">{{ apiError() }}</div>
   }
   @if (planOutdated()) {
     <div class="warn">
-      ⚠️ ออเดอร์หรือข้อมูลลูกค้ามีการเปลี่ยนแปลง แผนเดิมใช้ไม่ได้แล้ว กรุณากดคำนวณจัดเส้นทางใหม่
+      ออเดอร์หรือข้อมูลลูกค้ามีการเปลี่ยนแปลง แผนเดิมใช้ไม่ได้แล้ว กรุณากดคำนวณจัดเส้นทางใหม่
       @if (publishedCount() > 0) {
         (ใบงานที่ไรเดอร์เห็นอยู่ยังเป็นของแผนเดิม)
       }
     </div>
   }
   @if (notice()) {
-    <div class="warn">ℹ️ {{ notice() }}</div>
+    <div class="warn">{{ notice() }}</div>
   }
 
   <p class="hint">
-    📦 ออเดอร์ที่รอจัดเส้นทาง: <b>{{ orders().length }}</b> รายการ ({{ totalBoxes() }} กล่อง)
+    ออเดอร์ที่รอจัดเส้นทาง: <b>{{ orders().length }}</b> รายการ ({{ totalBoxes() }} กล่อง)
     @if (!plan()) {
       · เมื่อคำนวณแล้วแผนที่จะขยายใหญ่ พร้อมเส้นทางของไรเดอร์แต่ละคนแยกตามสี
     }
@@ -50,16 +50,16 @@
     <!-- สถานะการส่งใบงานให้ไรเดอร์ (เก็บในฐานข้อมูล ไรเดอร์เปิดหน้า 4 จากมือถือได้) -->
     @switch (publishState()) {
       @case ('saving') {
-        <div class="publish">⏳ กำลังส่งใบงานให้ไรเดอร์...</div>
+        <div class="publish">กำลังส่งใบงานให้ไรเดอร์...</div>
       }
       @case ('saved') {
         <div class="publish">
-          📤 ส่งใบงานให้ไรเดอร์แล้ว {{ publishedCount() }} ใบ — ไรเดอร์เปิดหน้า "4. ไรเดอร์" จากมือถือ แล้วกรอกรหัสใบงานได้เลย
+          ส่งใบงานให้ไรเดอร์แล้ว {{ publishedCount() }} ใบ — ไรเดอร์เปิดหน้า "4. ไรเดอร์" จากมือถือ แล้วกรอกรหัสใบงานได้เลย
         </div>
       }
       @case ('error') {
         <div class="error">
-          ⚠️ ส่งใบงานให้ไรเดอร์ไม่สำเร็จ ไรเดอร์จะยังไม่เห็นแผนนี้
+          ส่งใบงานให้ไรเดอร์ไม่สำเร็จ ไรเดอร์จะยังไม่เห็นแผนนี้
           <button class="btn-retry" (click)="retryPublish()">ส่งอีกครั้ง</button>
         </div>
       }
@@ -68,16 +68,16 @@
     <!-- สถานะความสำเร็จ -->
     @if (p.summary.allOnTime) {
       <div class="success">
-        ✓ จัดเส้นทางสำเร็จ! ทุกจุดจัดส่งเสร็จสิ้นก่อนเวลา 12:30 น. (ลูกค้าคนสุดท้ายได้รับของ {{ p.summary.lastArrivalTime }})
+        จัดเส้นทางสำเร็จ! ทุกจุดจัดส่งเสร็จสิ้นก่อนเวลา 12:30 น. (ลูกค้าคนสุดท้ายได้รับของ {{ p.summary.lastArrivalTime }})
       </div>
     } @else {
       <div class="error">
-        ✗ มี {{ p.summary.lateStops }} จุดที่ส่งถึงหลัง 12:30 น. — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นด้านล่าง
+        มี {{ p.summary.lateStops }} จุดที่ส่งถึงหลัง 12:30 น. — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นด้านล่าง
       </div>
     }
     @if (p.summary.profit < 0) {
       <div class="error">
-        ⚠️ แผนนี้ <b>ขาดทุน {{ abs(p.summary.profit) | number:'1.0-0' }} ฿</b> — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นเพื่อหาเส้นทางที่ไม่ขาดทุน
+        แผนนี้ <b>ขาดทุน {{ abs(p.summary.profit) | number:'1.0-0' }} ฿</b> — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นเพื่อหาเส้นทางที่ไม่ขาดทุน
       </div>
     }
 
@@ -118,7 +118,7 @@
     </div>
 
     <!-- ทางเลือกเส้นทางที่ระบบเสนอ -->
-    <h4 class="list-title">🔀 ทางเลือกเส้นทางที่ระบบเสนอ (ชุดที่ {{ round() }})</h4>
+    <h4 class="list-title">ทางเลือกเส้นทางที่ระบบเสนอ (ชุดที่ {{ round() }})</h4>
     <div class="alts">
       @for (alt of proposals(); track alt.key; let i = $index) {
         <button class="alt" [class.selected]="i === selectedIndex()" (click)="selectPlan(i)">
@@ -156,8 +156,8 @@
           </div>
 
           <p class="job-meta">
-            📏 ระยะทาง: <b>{{ del.distanceKm | number:'1.1-1' }} กม.</b> | ⏱️ เวลาโดยประมาณ: <b>{{ del.durationMin }} นาที</b><br>
-            💸 ค่าไรเดอร์: <b>{{ del.cost | number }} ฿</b>
+            ระยะทาง: <b>{{ del.distanceKm | number:'1.1-1' }} กม.</b> | เวลาโดยประมาณ: <b>{{ del.durationMin }} นาที</b><br>
+            ค่าไรเดอร์: <b>{{ del.cost | number }} ฿</b>
             <small>(ค่าเรียก {{ del.tripFee }} + ระยะทาง {{ del.distanceFee | number }})</small>
           </p>
 

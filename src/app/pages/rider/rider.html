@@ -1,15 +1,15 @@
 <div class="phone">
   <div class="head">
-    <h3 class="title">📱 ใบงานไรเดอร์</h3>
+    <h3 class="title">ใบงานไรเดอร์</h3>
     <button class="btn-reload" [disabled]="loading()" (click)="reload()">
-      {{ loading() ? '⏳ กำลังโหลด...' : '🔄 โหลดใบงานล่าสุด' }}
+      {{ loading() ? 'กำลังโหลด...' : 'โหลดใบงานล่าสุด' }}
     </button>
   </div>
   @if (publishedTime()) {
     <p class="updated">ใบงานชุดนี้ส่งมาเมื่อ {{ publishedTime() }}</p>
   }
   @if (apiError()) {
-    <div class="error">⚠️ {{ apiError() }}</div>
+    <div class="error">{{ apiError() }}</div>
   }
 
   <!-- ช่องกรอก และ ปุ่มเลือกรหัสใบงาน -->
@@ -39,7 +39,7 @@
       </div>
     </div>
 
-    <p class="route-line">🏪 {{ routeLine() }}</p>
+    <p class="route-line">{{ routeLine() }}</p>
     <p class="meta">
       ออกจากร้าน {{ departureTime }} · ระยะทาง {{ job.distanceKm | number:'1.1-1' }} กม. · ต้องส่งให้ครบก่อน {{ deadlineTime }}
     </p>
@@ -57,11 +57,11 @@
     }
 
     <!-- ปุ่มเปิดแผนที่นำทางตามใบงานนี้ (เปิด Google Maps) -->
-    <a class="btn-map" [href]="mapUrl()" target="_blank" rel="noopener">🧭 เปิดแผนที่นำทาง</a>
+    <a class="btn-map" [href]="mapUrl()" target="_blank" rel="noopener">เปิดแผนที่นำทาง</a>
   } @else {
     <div class="empty">
       @if (availableJobCodes().length === 0) {
-        ยังไม่มีใบงาน — รอเจ้าของร้านกด <b>คำนวณจัดเส้นทาง</b> ที่หน้า "3. จัดเส้นทาง" แล้วกด <b>🔄 โหลดใบงานล่าสุด</b>
+        ยังไม่มีใบงาน — รอเจ้าของร้านกด <b>คำนวณจัดเส้นทาง</b> ที่หน้า "3. จัดเส้นทาง" แล้วกด <b>โหลดใบงานล่าสุด</b>
       } @else if (selectedJobId().trim() !== '') {
         ไม่พบใบงาน <b>{{ selectedJobId().trim() }}</b> — ลองเช็ครหัสอีกครั้ง หรือกดเลือกจากปุ่มด้านบน
       } @else {

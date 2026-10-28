@@ -22,6 +22,7 @@ import {
   STRATEGY_LABELS
 } from '../../models/route.model';
 import { DELIVERY_RADIUS_KM, SHOP_LOCATION } from '../../utils/geo';
+import { SHOP_ICON } from '../../utils/map-icons';
 
 declare let L: any; // Leaflet (โหลดจาก index.html)
 
@@ -115,21 +116,12 @@ export class Route {
     }).addTo(this.map);
     this.map.fitBounds(this.radiusBounds);
 
-    L.marker(shop, { icon: this.emojiIcon('🏪', 28), zIndexOffset: 1000 })
+    L.marker(shop, { icon: L.divIcon({ html: SHOP_ICON.html, className: '', iconSize: SHOP_ICON.size, iconAnchor: SHOP_ICON.anchor }), zIndexOffset: 1000 })
       .addTo(this.map)
       .bindPopup('<b>ร้านข้าวกล่องส่งด่วน</b><br>จุดออกเดินทาง 11:30 น.');
 
     this.layer = L.layerGroup().addTo(this.map);
     this.mapReady.set(true);
-  }
-
-  private emojiIcon(emoji: string, size: number) {
-    return L.divIcon({
-      html: `<div style="font-size:${size}px;line-height:1">${emoji}</div>`,
-      className: '',
-      iconSize: [size, size],
-      iconAnchor: [size / 2, size / 2]
-    });
   }
 
   // หมุดตัวเลขลำดับจุดส่ง สีเดียวกับเส้นทางของไรเดอร์

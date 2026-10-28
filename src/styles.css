@@ -7,7 +7,7 @@
 @tailwindcss components;
 @tailwindcss utilities;
 
-/* ☕ Custom Theme: caramellatte */
+/* Custom Theme: caramellatte */
 [data-theme="caramellatte"] {
   color-scheme: light;
   --color-base-100: oklch(98% 0.016 73.684);

@@ -17,9 +17,9 @@ export const ROUTE_COLORS = [
 export type RouteStrategy = 'cheapest' | 'shortest' | 'fastest';
 
 export const STRATEGY_LABELS: Record<RouteStrategy, string> = {
-  cheapest: '💰 ประหยัดสุด',
-  shortest: '📏 ระยะทางรวมสั้นสุด',
-  fastest: '⚡ ส่งไวสุด'
+  cheapest: 'ประหยัดสุด',
+  shortest: 'ระยะทางรวมสั้นสุด',
+  fastest: 'ส่งไวสุด'
 };
 
 export const STRATEGY_HINTS: Record<RouteStrategy, string> = {

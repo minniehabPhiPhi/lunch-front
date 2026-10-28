@@ -1,5 +1,5 @@
 <div class="card">
-  <h3 class="title">👥 จัดการข้อมูลลูกค้า</h3>
+  <h3 class="title">จัดการข้อมูลลูกค้า</h3>
   <p class="hint">รัศมีไม่เกิน {{ radiusKm }} กม. รอบร้าน (โซน มมส.)</p>
 
   <!-- ฟอร์มกรอก -->
@@ -12,15 +12,15 @@
   </div>
 
   @if (errorMsg()) {
-    <div class="error">⚠️ {{ errorMsg() }}</div>
+    <div class="error">{{ errorMsg() }}</div>
   }
   @if (apiError()) {
-    <div class="error">⚠️ {{ apiError() }}</div>
+    <div class="error">{{ apiError() }}</div>
   }
 
   <div class="actions">
     <button class="btn-primary" [disabled]="loading()" (click)="saveCustomer()">
-      {{ editingId() === null ? '+ เพิ่มลูกค้า' : '💾 บันทึกการแก้ไข' }}
+      {{ editingId() === null ? '+ เพิ่มลูกค้า' : 'บันทึกการแก้ไข' }}
     </button>
     @if (editingId() !== null) {
       <button class="btn-secondary" (click)="cancelEdit()">ยกเลิก</button>
@@ -28,29 +28,29 @@
   </div>
 
   <!-- แผนที่แสดงตำแหน่งบ้านลูกค้า -->
-  <p class="hint">📍 คลิกบนแผนที่ หรือลากหมุดเพื่อเลือกตำแหน่งบ้านลูกค้า (พิกัดจะถูกกรอกให้อัตโนมัติ)</p>
+  <p class="hint">คลิกบนแผนที่ หรือลากหมุดเพื่อเลือกตำแหน่งบ้านลูกค้า (พิกัดจะถูกกรอกให้อัตโนมัติ)</p>
   <div #mapEl class="map"></div>
 
   <!-- รายการลูกค้า -->
   <h4 class="list-title">
     รายชื่อลูกค้าทั้งหมด ({{ customers().length }} คน)
     @if (loading()) {
-      <small class="phone">⏳ กำลังติดต่อ backend...</small>
+      <small class="phone">กำลังติดต่อ backend...</small>
     }
   </h4>
   @for (c of customers(); track c.id) {
     <div class="row" [class.editing]="editingId() === c.id">
       <div>
         <strong>{{ c.name }}</strong> <small class="phone">({{ c.phone }})</small>
-        <br><small class="phone">🏠 {{ c.address }}</small>
+        <br><small class="phone">{{ c.address }}</small>
       </div>
       <div class="row-right">
         <button class="coord" (click)="focusOn(c)" title="ดูบนแผนที่">
-          📍 {{ c.lat | number:'1.4-6' }}, {{ c.lng | number:'1.4-6' }} · ห่างร้าน {{ c.distance | number:'1.1-1' }} กม.
+          {{ c.lat | number:'1.4-6' }}, {{ c.lng | number:'1.4-6' }} · ห่างร้าน {{ c.distance | number:'1.1-1' }} กม.
         </button>
         <div class="row-actions">
-          <button class="btn-small" (click)="startEdit(c)">✏️ แก้ไข</button>
-          <button class="btn-small btn-danger" (click)="removeCustomer(c)">🗑️ ลบ</button>
+          <button class="btn-small" (click)="startEdit(c)">แก้ไข</button>
+          <button class="btn-small btn-danger" (click)="removeCustomer(c)">ลบ</button>
         </div>
       </div>
     </div>

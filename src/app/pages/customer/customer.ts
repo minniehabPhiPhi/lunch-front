@@ -14,6 +14,7 @@ import { FormsModule } from '@angular/forms';
 import { DeliveryService } from '../../services/delivery';
 import { CustomerForm, CustomerInfo } from '../../models/customer.model';
 import { DELIVERY_RADIUS_KM, SHOP_LOCATION, distanceKm } from '../../utils/geo';
+import { PIN_ICON, SHOP_ICON } from '../../utils/map-icons';
 
 declare let L: any; // Leaflet (โหลดจาก index.html)
 
@@ -80,7 +81,7 @@ export class Customer {
       }
     });
 
-    // พิมพ์ละติจูด/ลองจิจูดในฟอร์ม -> ย้ายหมุด 📍 ตาม
+    // พิมพ์ละติจูด/ลองจิจูดในฟอร์ม -> ย้ายหมุดเลือกตำแหน่งตาม
     effect(() => {
       const lat = this.parseCoord(this.lat());
       const lng = this.parseCoord(this.lng());
@@ -114,14 +115,14 @@ export class Customer {
     }).addTo(this.map);
     this.map.fitBounds(L.latLng(shop).toBounds(DELIVERY_RADIUS_KM * 2000));
 
-    L.marker(shop, { icon: this.emojiIcon('🏪', 28) })
+    L.marker(shop, { icon: this.icon(SHOP_ICON) })
       .addTo(this.map)
       .bindPopup('<b>ร้านข้าวกล่องส่งด่วน</b>');
 
     this.customerLayer = L.layerGroup().addTo(this.map);
 
     // หมุดเลือกตำแหน่งบ้านลูกค้า (ลากได้)
-    this.pin = L.marker(shop, { draggable: true, icon: this.emojiIcon('📍', 30, 'bottom') }).addTo(this.map);
+    this.pin = L.marker(shop, { draggable: true, icon: this.icon(PIN_ICON) }).addTo(this.map);
     this.pin.on('dragend', () => {
       const p = this.pin.getLatLng();
       this.setPosition(p.lat, p.lng);
@@ -131,13 +132,8 @@ export class Customer {
     this.mapReady.set(true);
   }
 
-  private emojiIcon(emoji: string, size: number, anchor: 'center' | 'bottom' = 'center') {
-    return L.divIcon({
-      html: `<div style="font-size:${size}px;line-height:1">${emoji}</div>`,
-      className: '',
-      iconSize: [size, size],
-      iconAnchor: anchor === 'center' ? [size / 2, size / 2] : [size / 2, size]
-    });
+  private icon(marker: typeof SHOP_ICON) {
+    return L.divIcon({ html: marker.html, className: '', iconSize: marker.size, iconAnchor: marker.anchor });
   }
 
   private drawCustomers(list: CustomerInfo[]) {
@@ -150,7 +146,7 @@ export class Customer {
         fillColor: '#e65100',
         fillOpacity: 0.8,
         radius: 8,
-        bubblingMouseEvents: false // คลิกหมุดลูกค้าแล้วไม่ให้หมุด 📍 ย้ายตาม
+        bubblingMouseEvents: false // คลิกหมุดลูกค้าแล้วไม่ให้หมุดเลือกตำแหน่งย้ายตาม
       })
         .bindPopup(`<b>${escapeHtml(c.name)}</b><br>โทร ${escapeHtml(c.phone)}`)
         .addTo(this.customerLayer);
