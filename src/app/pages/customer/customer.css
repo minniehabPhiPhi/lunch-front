@@ -18,7 +18,7 @@
 /* ฟอร์มกรอก */
 .form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 15px;
 }
@@ -28,9 +28,13 @@
 }
 
 .form-grid input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #ddd;
+  font-size: 16px; /* 16px ขึ้นไป มือถือ iPhone จะไม่ซูมหน้าเว็บตอนแตะช่องกรอก */
 }
 
 .error {
@@ -147,4 +151,24 @@
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* จอมือถือ: ฟอร์มเหลือคอลัมน์เดียว และรายการลูกค้าเรียงลงล่าง */
+@media (max-width: 600px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .map {
+    height: 280px;
+  }
+
+  .row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .row-right {
+    align-items: flex-start;
+  }
 }
