@@ -1,42 +1,41 @@
-:root{--bg:#f5f3ee;--card:#fff;--line:#e6e1d8;--field:#f3efe8;--ink:#2a2118;--muted:#7a6f63;--org:#ea580c;--green:#15803d;--red:#dc2626}
-*{box-sizing:border-box}
-body{margin:0;font:16px/1.5 'Noto Sans Thai',Sarabun,sans-serif;color:var(--ink);background:var(--bg)}
-h1{font-size:25px;line-height:1.3;margin:0}
-h2{font-size:18px;line-height:1.3;margin:0 0 12px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:18px 20px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-.muted{color:var(--muted);font-size:14px}.hint{color:var(--muted);font-size:14px;margin:10px 0}
-.err{color:var(--red);font-weight:700;margin:8px 0}.okmsg{color:var(--green);margin:10px 0 0}
-input,select{font:inherit;padding:10px 14px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:10px;min-width:0}
-:focus-visible{outline:3px solid #fdba74;outline-offset:2px}
-.btn{font:700 16px/1.2 'Noto Sans Thai',sans-serif;padding:12px 18px;color:#fff;background:var(--org);border:0;border-radius:12px;cursor:pointer;text-decoration:none;display:inline-block;text-align:center}
-.btn.ghost{color:var(--ink);background:var(--card);border:1px solid var(--line)}
-.btn.block{display:block;margin-top:14px}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.scroll{max-height:430px;overflow:auto}.scroll.tall{max-height:520px}
-table{width:100%;border-collapse:collapse}
-th{text-align:left;padding:10px 6px;position:sticky;top:0;background:var(--card);z-index:1}
-td{padding:8px 6px;border-top:1px solid var(--line);vertical-align:middle}
-td input{width:100%;padding:7px 10px}
-button.x{font-size:17px;color:var(--red);background:none;border:0;padding:4px 8px;cursor:pointer}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0 4px}
-.kpi{padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:12px}
-.kpi span{display:block;font-size:14px}
-.kpi b{font-size:21px;line-height:1.4}
-.kpi.good b{color:var(--green)}.kpi.bad b{color:var(--red)}
-.map{height:470px;border-radius:14px;border:1px solid var(--line);z-index:0;background:#e9eee4}
-.soft{filter:saturate(.3) opacity(.6)}
-.cm,.shopm,.ringlab,.np{background:none;border:0}
-.cm i{position:absolute;left:-5px;top:-5px;width:10px;height:10px;border-radius:50%;background:#9ca3af;border:1.5px solid #fff}
-.cm.on i{background:var(--org)}
-.cm b{position:absolute;left:8px;top:-7px;font:600 10px/1 'Noto Sans Thai',sans-serif;color:#6b5f54;white-space:nowrap;text-shadow:0 0 3px #fff,0 0 3px #fff}
-.cm.on b{color:#3b2a1d}
-.shopm i{position:absolute;left:-13px;top:-13px;display:grid;place-items:center;width:26px;height:26px;font-size:13px;font-style:normal;background:#2b2118;border:2px solid #fff;border-radius:7px;box-shadow:0 1px 4px #0005}
-.shopm b{position:absolute;left:-16px;top:16px;width:32px;text-align:center;font:700 10px/1 'Noto Sans Thai',sans-serif;text-shadow:0 0 3px #fff,0 0 3px #fff}
-.ringlab{margin-left:4px;margin-top:-6px;font:600 10px/1 'Noto Sans Thai',sans-serif;color:#8b9884;white-space:nowrap}
-.np i{display:grid;place-items:center;width:20px;height:20px;border-radius:50%;color:#fff;font:700 11px/1 'Noto Sans Thai',sans-serif;border:2px solid #fff;box-shadow:0 1px 3px #0006}
-@media (max-width:860px){
-  .grid2{grid-template-columns:1fr}
-  .map{height:380px}
+/* You can add global styles to this file, and also import other style files */
+
+@import 'tailwindcss';
+@plugin "daisyui";
+
+@tailwindcss base;
+@tailwindcss components;
+@tailwindcss utilities;
+
+/* ☕ Custom Theme: caramellatte */
+[data-theme="caramellatte"] {
+  color-scheme: light;
+  --color-base-100: oklch(98% 0.016 73.684);
+  --color-base-200: oklch(95% 0.038 75.164);
+  --color-base-300: oklch(90% 0.076 70.697);
+  --color-base-content: oklch(40% 0.123 38.172);
+  --color-primary: oklch(0% 0 0);
+  --color-primary-content: oklch(100% 0 0);
+  --color-secondary: oklch(22.45% 0.075 37.85);
+  --color-secondary-content: oklch(90% 0.076 70.697);
+  --color-accent: oklch(46.44% 0.111 37.85);
+  --color-accent-content: oklch(90% 0.076 70.697);
+  --color-neutral: oklch(55% 0.195 38.402);
+  --color-neutral-content: oklch(98% 0.016 73.684);
+  --color-info: oklch(42% 0.199 265.638);
+  --color-info-content: oklch(90% 0.076 70.697);
+  --color-success: oklch(43% 0.095 166.913);
+  --color-success-content: oklch(90% 0.076 70.697);
+  --color-warning: oklch(82% 0.189 84.429);
+  --color-warning-content: oklch(41% 0.112 45.904);
+  --color-error: oklch(70% 0.191 22.216);
+  --color-error-content: oklch(39% 0.141 25.723);
+  --radius-selector: 2rem;
+  --radius-field: 0.5rem;
+  --radius-box: 1rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 2px;
+  --depth: 1;
+  --noise: 1;
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}

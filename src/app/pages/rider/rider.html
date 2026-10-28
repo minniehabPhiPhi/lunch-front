@@ -1,30 +1,72 @@
 <div class="phone">
-  <h2>📱 ใบงานไรเดอร์</h2>
-  <input class="code" placeholder="กรอกเลขใบงาน เช่น JOB-01" [value]="code()" (input)="code.set(v($event))">
-  <div class="chips">
-    @for (j of store.jobs(); track j.code) { <button class="chip" [class.on]="j.code === key()" (click)="code.set(j.code)">{{ j.code }}</button> }
+  <div class="head">
+    <h3 class="title">📱 ใบงานไรเดอร์</h3>
+    <button class="btn-reload" [disabled]="loading()" (click)="reload()">
+      {{ loading() ? '⏳ กำลังโหลด...' : '🔄 โหลดใบงานล่าสุด' }}
+    </button>
   </div>
-  @if (job(); as j) {
-    <div class="kpis two">
-      <div class="kpi"><span>หยิบข้าวกล่อง</span><b>{{ j.boxes }} กล่อง</b></div>
-      <div class="kpi"><span>จำนวนจุดส่ง</span><b>{{ j.stops.length }} จุด</b></div>
+  @if (publishedTime()) {
+    <p class="updated">ใบงานชุดนี้ส่งมาเมื่อ {{ publishedTime() }}</p>
+  }
+  @if (apiError()) {
+    <div class="error">⚠️ {{ apiError() }}</div>
+  }
+
+  <!-- ช่องกรอก และ ปุ่มเลือกรหัสใบงาน -->
+  <input type="text" class="code-input" [(ngModel)]="selectedJobId" placeholder="กรอกรหัสใบงาน เช่น JOB-01">
+
+  <!-- บรรทัดเลือกปุ่ม JOB -->
+  <div class="chips">
+    @for (code of availableJobCodes(); track code) {
+      <button class="chip" [class.active]="code === currentCode()" (click)="selectJob(code)">
+        {{ code }}
+      </button>
+    }
+  </div>
+
+  <hr>
+
+  <!-- รายละเอียดงานส่ง (แสดงผลเมื่อเลือกใบงาน) -->
+  @if (currentJob(); as job) {
+    <div class="boxes">
+      <div class="tile">
+        <small>หยิบข้าวกล่อง</small>
+        <h3>{{ job.boxes }} กล่อง</h3>
+      </div>
+      <div class="tile">
+        <small>จำนวนจุดส่ง</small>
+        <h3>{{ job.stopsCount }} จุด</h3>
+      </div>
     </div>
-    <ol class="stops">
-      @for (s of j.stops; track $index) {
-        <li>
-          <a class="num" [attr.href]="stopUrl(s)" target="_blank" rel="noopener" [attr.aria-label]="'เปิดแผนที่นำทางไปจุดที่ ' + ($index + 1)">{{ $index + 1 }}</a>
-          <div>
-            <b>จุดที่ {{ $index + 1 }}: บ้านคุณ {{ first(s.name) }}</b>
-            <p>{{ s.qty }} กล่อง · โทร {{ s.phone || '-' }}</p>
-            <p>ถึงโดยประมาณ {{ s.eta }} น.</p>
-          </div>
-        </li>
-      }
-    </ol>
-    <a class="btn block" [href]="url(j)" target="_blank" rel="noopener">🧭 เปิดแผนที่นำทาง</a>
-  } @else if (!store.jobs().length) {
-    <p class="muted">ยังไม่มีใบงาน ให้เจ้าของร้านไปหน้า "จัดเส้นทาง" ก่อน</p>
+
+    <p class="route-line">🏪 {{ routeLine() }}</p>
+    <p class="meta">
+      ออกจากร้าน {{ departureTime }} · ระยะทาง {{ job.distanceKm | number:'1.1-1' }} กม. · ต้องส่งให้ครบก่อน {{ deadlineTime }}
+    </p>
+
+    <!-- รายการจุดส่ง Step-by-Step -->
+    @for (stop of job.stops; track $index; let i = $index) {
+      <div class="step">
+        <div class="step-no">{{ i + 1 }}</div>
+        <div>
+          <strong>จุดที่ {{ i + 1 }}: ไปส่งบ้าน{{ stop.name }}</strong><br>
+          <small class="muted">{{ stop.boxes }} กล่อง · โทร <a [href]="'tel:' + stop.phone">{{ stop.phone }}</a></small><br>
+          <small class="eta">ถึงโดยประมาณ {{ stop.time }}</small>
+        </div>
+      </div>
+    }
+
+    <!-- ปุ่มเปิดแผนที่นำทางตามใบงานนี้ (เปิด Google Maps) -->
+    <a class="btn-map" [href]="mapUrl()" target="_blank" rel="noopener">🧭 เปิดแผนที่นำทาง</a>
   } @else {
-    <p class="muted">ไม่พบใบงานเลขนี้ ลองเลือกจากปุ่มด้านบน</p>
+    <div class="empty">
+      @if (availableJobCodes().length === 0) {
+        ยังไม่มีใบงาน — รอเจ้าของร้านกด <b>คำนวณจัดเส้นทาง</b> ที่หน้า "3. จัดเส้นทาง" แล้วกด <b>🔄 โหลดใบงานล่าสุด</b>
+      } @else if (selectedJobId().trim() !== '') {
+        ไม่พบใบงาน <b>{{ selectedJobId().trim() }}</b> — ลองเช็ครหัสอีกครั้ง หรือกดเลือกจากปุ่มด้านบน
+      } @else {
+        กรุณากรอกหรือคลิกเลือก <b>รหัสใบงาน</b> ด้านบนเพื่อดูรายละเอียดงานส่ง
+      }
+    </div>
   }
 </div>

@@ -1,42 +1,60 @@
-<div class="grid2">
-  <section class="card">
-    <h2>จัดการข้อมูลลูกค้า</h2>
-    @if (error()) { <p class="err">{{ error() }}</p> }
-    @if (loading()) { <p class="muted">กำลังโหลด... Render แบบฟรีอาจใช้เวลาปลุกเซิร์ฟเวอร์ประมาณ 1 นาที</p> }
-    <div class="form2">
-      <input placeholder="ชื่อลูกค้า" [value]="name()" (input)="name.set(v($event))">
-      <input placeholder="เบอร์โทร" [value]="phone()" (input)="phone.set(v($event))">
-      <input placeholder="ละติจูด" [value]="lat()" (input)="lat.set(v($event)); drawPick()">
-      <input placeholder="ลองจิจูด" [value]="lng()" (input)="lng.set(v($event)); drawPick()">
+<div class="card">
+  <h3 class="title">👥 จัดการข้อมูลลูกค้า</h3>
+  <p class="hint">รัศมีไม่เกิน {{ radiusKm }} กม. รอบร้าน (โซน มมส.)</p>
+
+  <!-- ฟอร์มกรอก -->
+  <div class="form-grid">
+    <input type="text" [(ngModel)]="name" placeholder="ชื่อ นามสกุล (เช่น สมชาย ใจดี)">
+    <input type="text" inputmode="tel" [(ngModel)]="phone" placeholder="เบอร์โทร">
+    <input type="text" [(ngModel)]="lat" placeholder="ละติจูด">
+    <input type="text" [(ngModel)]="lng" placeholder="ลองจิจูด">
+    <input type="text" class="wide" [(ngModel)]="address" placeholder="ที่อยู่ / รายละเอียดบ้าน (เช่น หอพัก A ห้อง 203)">
+  </div>
+
+  @if (errorMsg()) {
+    <div class="error">⚠️ {{ errorMsg() }}</div>
+  }
+  @if (apiError()) {
+    <div class="error">⚠️ {{ apiError() }}</div>
+  }
+
+  <div class="actions">
+    <button class="btn-primary" [disabled]="loading()" (click)="saveCustomer()">
+      {{ editingId() === null ? '+ เพิ่มลูกค้า' : '💾 บันทึกการแก้ไข' }}
+    </button>
+    @if (editingId() !== null) {
+      <button class="btn-secondary" (click)="cancelEdit()">ยกเลิก</button>
+    }
+  </div>
+
+  <!-- แผนที่แสดงตำแหน่งบ้านลูกค้า -->
+  <p class="hint">📍 คลิกบนแผนที่ หรือลากหมุดเพื่อเลือกตำแหน่งบ้านลูกค้า (พิกัดจะถูกกรอกให้อัตโนมัติ)</p>
+  <div #mapEl class="map"></div>
+
+  <!-- รายการลูกค้า -->
+  <h4 class="list-title">
+    รายชื่อลูกค้าทั้งหมด ({{ customers().length }} คน)
+    @if (loading()) {
+      <small class="phone">⏳ กำลังติดต่อ backend...</small>
+    }
+  </h4>
+  @for (c of customers(); track c.id) {
+    <div class="row" [class.editing]="editingId() === c.id">
+      <div>
+        <strong>{{ c.name }}</strong> <small class="phone">({{ c.phone }})</small>
+        <br><small class="phone">🏠 {{ c.address }}</small>
+      </div>
+      <div class="row-right">
+        <button class="coord" (click)="focusOn(c)" title="ดูบนแผนที่">
+          📍 {{ c.lat | number:'1.4-6' }}, {{ c.lng | number:'1.4-6' }} · ห่างร้าน {{ c.distance | number:'1.1-1' }} กม.
+        </button>
+        <div class="row-actions">
+          <button class="btn-small" (click)="startEdit(c)">✏️ แก้ไข</button>
+          <button class="btn-small btn-danger" (click)="removeCustomer(c)">🗑️ ลบ</button>
+        </div>
+      </div>
     </div>
-    <button class="btn" (click)="add()" [disabled]="!valid() || busy()">+ เพิ่มลูกค้า</button>
-    <p class="hint">💡 คลิกบนแผนที่เพื่อเลือกพิกัดบ้านลูกค้า (วงแดง) · ลากหมุด "ร้าน" เพื่อย้ายตำแหน่งร้าน</p>
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>ชื่อ</th>
-            <th>เบอร์</th>
-            <th>พิกัด</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (c of rows(); track c.customer_id) {
-          <tr>
-            <td><input [value]="nm(c)" (change)="rename(c, $event)"></td>
-            <td><input [value]="c.phone_number" (change)="rephone(c, $event)"></td>
-            <td class="coord" (click)="show(c)">{{ coord(c) }}</td>
-            <td><button class="x" (click)="remove(c)" title="ลบลูกค้า">✕</button></td>
-          </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-  </section>
-  <section class="card">
-    <h2>แผนที่บ้านลูกค้า (รัศมี 3 กม. รอบร้าน)</h2>
-    <div class="map" #mapEl></div>
-    <p class="hint">จุดส้ม = ลูกค้าที่มีออเดอร์วันนี้ · จุดเทา = ไม่มีออเดอร์</p>
-  </section>
+  } @empty {
+    <div class="empty">ยังไม่มีลูกค้า — กรอกข้อมูลด้านบนแล้วกด "เพิ่มลูกค้า"</div>
+  }
 </div>

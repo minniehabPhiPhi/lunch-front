@@ -1,49 +1,100 @@
-<div class="grid2 orders">
-  <section class="card">
-    <h2>จัดการออเดอร์ / จำลองการสั่งซื้อ</h2>
-    @if (error()) { <p class="err">{{ error() }}</p> }
-    @if (loading()) { <p class="muted">กำลังโหลด... Render แบบฟรีอาจใช้เวลาปลุกเซิร์ฟเวอร์ประมาณ 1 นาที</p> }
-    <div class="form-row">
-      <select class="grow" (change)="cid.set(+$any($event.target).value)">
-        @for (c of customers(); track c.customer_id) { <option [value]="c.customer_id" [selected]="c.customer_id === cid()">{{ nm(c) }}</option> }
-      </select>
-      <select class="qty" (change)="qty.set(+$any($event.target).value)">
-        @for (n of opts; track n) { <option [value]="n" [selected]="n === qty()">{{ n }}</option> }
-      </select>
-      <button class="btn" (click)="add()" [disabled]="!cid() || busy()">+ เพิ่มออเดอร์</button>
+<div class="card">
+  <h3 class="title">📋 จัดการออเดอร์ / จำลองการสั่งซื้อ</h3>
+  <p class="hint">ออเดอร์ละไม่เกิน {{ maxBoxes }} กล่อง · ราคา {{ boxPrice }} บาท/กล่อง · ต้นทุน {{ boxCost }} บาท/กล่อง</p>
+
+  <div class="actions">
+    <button class="btn-primary" [disabled]="loading()" (click)="generateOrders()">
+      🎲 สุ่มออเดอร์จำลอง (20-30 รายการ)
+    </button>
+    <button class="btn-secondary" [disabled]="loading()" (click)="clearOrders()">
+      ล้างทั้งหมด
+    </button>
+  </div>
+
+  @if (apiError()) {
+    <div class="error">⚠️ {{ apiError() }}</div>
+  }
+  @if (loading()) {
+    <p class="note">⏳ กำลังติดต่อ backend...</p>
+  }
+
+  <!-- เพิ่มออเดอร์เอง -->
+  <div class="add-box">
+    <strong>➕ เพิ่มออเดอร์</strong>
+    <select [(ngModel)]="selectedCustomerId" [disabled]="availableCustomers().length === 0">
+      <option [ngValue]="null">-- เลือกลูกค้า --</option>
+      @for (c of availableCustomers(); track c.id) {
+        <option [ngValue]="c.id">{{ c.name }} ({{ c.phone }})</option>
+      }
+    </select>
+    <select [(ngModel)]="newQuantity">
+      @for (n of boxOptions; track n) {
+        <option [ngValue]="n">{{ n }} กล่อง</option>
+      }
+    </select>
+    <button class="btn-primary" [disabled]="selectedCustomerId() === null" (click)="addOrder()">+ เพิ่ม</button>
+    @if (availableCustomers().length === 0) {
+      <small class="note">ลูกค้าทุกคนมีออเดอร์แล้ว (เพิ่มลูกค้าใหม่ได้ที่หน้า "1. ข้อมูลลูกค้า")</small>
+    }
+  </div>
+
+  @if (orders().length > 0) {
+    <!-- แถบสรุปยอดคำนวณ -->
+    <div class="summary">
+      <div class="sum-cell sum-gray">
+        <small>ออเดอร์รวม</small>
+        <h4>{{ orders().length }} รายการ</h4>
+      </div>
+      <div class="sum-cell sum-orange">
+        <small>ข้าวกล่องรวม</small>
+        <h4 class="orange">{{ totalBoxes() }} กล่อง</h4>
+      </div>
+      <div class="sum-cell sum-green">
+        <small>รายได้รวม</small>
+        <h4 class="green">{{ totalRevenue() | number }} ฿</h4>
+      </div>
+      <div class="sum-cell sum-green">
+        <small>กำไรคาดการณ์</small>
+        <h4 class="green">{{ totalProfit() | number }} ฿</h4>
+      </div>
     </div>
-    <div class="form-row">
-      <button class="btn ghost" (click)="seed()" [disabled]="busy()">🎲 สุ่มออเดอร์จำลอง (20–30)</button>
-      <button class="btn ghost" (click)="clear()" [disabled]="busy() || !rows().length">ล้างทั้งหมด</button>
-    </div>
-    <p class="hint">ออเดอร์ละไม่เกิน {{ max }} กล่อง · ราคา {{ price }} บาท/กล่อง · ต้นทุน {{ cost }} บาท/กล่อง</p>
-  </section>
-  <section class="card">
-    <div class="kpis">
-      <div class="kpi"><span>ออเดอร์</span><b>{{ rows().length }}</b></div>
-      <div class="kpi"><span>ข้าวกล่อง</span><b>{{ boxes() }}</b></div>
-      <div class="kpi"><span>ยอดขาย</span><b>{{ baht(boxes() * price) }}</b></div>
-      <div class="kpi"><span>ไรเดอร์ที่ต้องใช้</span><b>{{ riders() }}</b></div>
-    </div>
-    <div class="scroll tall">
+    <p class="note note-block">* กำไรคาดการณ์คิดจากราคาขายลบต้นทุนอาหาร ยังไม่หักค่าไรเดอร์ (ยอดสุทธิดูได้ที่หน้า "3. จัดเส้นทาง")</p>
+
+    <!-- ตารางแสดงรายการออเดอร์ -->
+    <div class="table-wrap">
       <table>
-        <thead><tr><th>#</th><th>ลูกค้า</th><th>กล่อง</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th>รหัส</th>
+            <th>ชื่อลูกค้า</th>
+            <th>จำนวนกล่อง</th>
+            <th>เวลาสั่ง</th>
+            <th>สถานะ</th>
+            <th></th>
+          </tr>
+        </thead>
         <tbody>
-          @for (o of rows(); track o.id; let i = $index) {
+          @for (ord of orders(); track ord.id) {
             <tr>
-              <td>{{ i + 1 }}</td><td>{{ o.name }}</td>
+              <td><b>{{ ord.id }}</b></td>
+              <td>{{ ord.customerName }}</td>
               <td>
-                <select class="mini" (change)="setQty(o, +$any($event.target).value)">
-                  @for (n of opts; track n) { <option [value]="n" [selected]="n === o.qty">{{ n }}</option> }
-                </select>
+                <div class="qty">
+                  <button class="step" (click)="changeQuantity(ord, -1)" [disabled]="ord.quantity <= 1" aria-label="ลดจำนวน">−</button>
+                  <span class="qty-num">{{ ord.quantity }}</span>
+                  <button class="step" (click)="changeQuantity(ord, 1)" [disabled]="ord.quantity >= maxBoxes" aria-label="เพิ่มจำนวน">+</button>
+                  <span>กล่อง</span>
+                </div>
               </td>
-              <td><button class="x" (click)="remove(o)" title="ลบออเดอร์">✕</button></td>
+              <td>{{ ord.time }}</td>
+              <td><span class="badge">{{ ord.status }}</span></td>
+              <td><button class="btn-small btn-danger" (click)="removeOrder(ord)">🗑️ ลบ</button></td>
             </tr>
-          } @empty {
-            @if (!loading()) { <tr><td colspan="4" class="muted">ยังไม่มีออเดอร์ กด "สุ่มออเดอร์จำลอง" เพื่อเริ่มทดสอบ</td></tr> }
           }
         </tbody>
       </table>
     </div>
-  </section>
+  } @else {
+    <div class="empty">ยังไม่มีออเดอร์ — กด "สุ่มออเดอร์จำลอง" หรือเพิ่มออเดอร์เองด้านบน</div>
+  }
 </div>

@@ -1,0 +1,137 @@
+import { TestBed } from '@angular/core/testing';
+import { RoutePlannerService } from './route-planner';
+import { OrderInfo } from '../models/order.model';
+import { DEADLINE_MINUTES, DEPARTURE_MINUTES, MAX_ORDERS_PER_RIDER } from '../models/route.model';
+import { DELIVERY_RADIUS_KM, SHOP_LOCATION, randomPointInRadius } from '../utils/geo';
+
+// ออเดอร์ทดสอบ (วางพิกัดเป็น กม. ทางทิศเหนือของร้าน)
+function orderAt(no: number, quantity: number, km: { north: number; east?: number }): OrderInfo {
+  return {
+    id: `ORD-${String(no).padStart(3, '0')}`,
+    customerId: no,
+    customerName: `ลูกค้า ${no}`,
+    phone: '0812345678',
+    quantity,
+    status: 'รอจัดเส้นทาง',
+    time: '11:00 น.',
+    lat: SHOP_LOCATION.lat + km.north / 111.32,
+    lng: SHOP_LOCATION.lng + (km.east ?? 0) / (111.32 * Math.cos((SHOP_LOCATION.lat * Math.PI) / 180))
+  };
+}
+
+function randomOrders(count: number): OrderInfo[] {
+  return Array.from({ length: count }, (_, i) => {
+    const p = randomPointInRadius(SHOP_LOCATION, DELIVERY_RADIUS_KM);
+    return { ...orderAt(i + 1, (i % 3) + 1, { north: 0 }), lat: p.lat, lng: p.lng };
+  });
+}
+
+describe('RoutePlannerService', () => {
+  let planner: RoutePlannerService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    planner = TestBed.inject(RoutePlannerService);
+  });
+
+  it('ไม่มีออเดอร์ = ไม่มีแผน', () => {
+    expect(planner.propose([])).toEqual([]);
+  });
+
+  it('คิดค่าไรเดอร์ตามโจทย์: 6 กล่อง วิ่ง 2 กม. = ค่าเรียก 15 + (2 x 6 x 2 = 24) = 39 บาท', () => {
+    const [plan] = planner.propose([orderAt(1, 6, { north: 2 })]);
+    const route = plan.routes[0];
+
+    expect(route.distanceKm).toBeCloseTo(2, 2);
+    expect(route.tripFee).toBe(15);
+    expect(route.distanceFee).toBe(24);
+    expect(route.cost).toBe(39);
+  });
+
+  it('ทุกออเดอร์ถูกจัดให้ไรเดอร์ครบ คนละครั้งเดียว และไรเดอร์ไม่เกินคนละ 3 จุด', () => {
+    const orders = randomOrders(27);
+
+    for (const plan of planner.propose(orders)) {
+      const assigned = plan.routes.flatMap(r => r.stops.map(s => s.orderId));
+      expect([...assigned].sort()).toEqual(orders.map(o => o.id).sort());
+      for (const route of plan.routes) {
+        expect(route.stops.length).toBeGreaterThan(0);
+        expect(route.stops.length).toBeLessThanOrEqual(MAX_ORDERS_PER_RIDER);
+        expect(route.totalBoxes).toBe(route.stops.reduce((sum, s) => sum + s.boxes, 0));
+      }
+    }
+  });
+
+  it('เวลาถึงเรียงตามลำดับจุดส่ง เริ่มหลัง 11:30 และส่งทันก่อน 12:30 เมื่อลูกค้าอยู่ในรัศมี 3 กม.', () => {
+    for (const plan of planner.propose(randomOrders(30))) {
+      expect(plan.summary.allOnTime).toBe(true);
+      for (const route of plan.routes) {
+        const times = route.stops.map(s => s.arrivalMin);
+        expect(times[0]).toBeGreaterThan(DEPARTURE_MINUTES - 1);
+        expect([...times].sort((a, b) => a - b)).toEqual(times);
+        expect(times[times.length - 1]).toBeLessThanOrEqual(DEADLINE_MINUTES);
+      }
+    }
+  });
+
+  it('สรุปกำไร = รายได้ - ต้นทุนข้าว - ค่าไรเดอร์', () => {
+    for (const plan of planner.propose(randomOrders(24))) {
+      const s = plan.summary;
+      expect(s.revenue).toBe(s.boxes * 65);
+      expect(s.foodCost).toBe(s.boxes * 40);
+      expect(s.riderCost).toBe(plan.routes.reduce((sum, r) => sum + r.cost, 0));
+      expect(s.profit).toBe(s.revenue - s.foodCost - s.riderCost);
+    }
+  });
+
+  it('เลือกลำดับจุดส่งที่ระยะสั้นกว่า (ไม่วิ่งกลับไปกลับมา)', () => {
+    // ลูกค้า 3 คนอยู่แนวเดียวกัน 1, 2, 3 กม. ส่งใส่ลำดับสลับกัน -> ต้องส่งจากใกล้ไปไกล = วิ่งรวม 3 กม.
+    const orders = [orderAt(1, 1, { north: 3 }), orderAt(2, 1, { north: 1 }), orderAt(3, 1, { north: 2 })];
+    const [plan] = planner.propose(orders);
+
+    expect(plan.routes).toHaveLength(1);
+    expect(plan.routes[0].stops.map(s => s.orderId)).toEqual(['ORD-002', 'ORD-003', 'ORD-001']);
+    expect(plan.routes[0].distanceKm).toBeCloseTo(3, 2);
+  });
+
+  it('แจ้งขาดทุนเมื่อค่าไรเดอร์สูงกว่ากำไรต่อกล่อง (1 กล่อง ไกล 10 กม.)', () => {
+    const [plan] = planner.propose([orderAt(1, 1, { north: 10 })]);
+
+    // รายได้ 65 - ข้าว 40 - (15 + 2 x 1 x 10) = -10
+    expect(plan.summary.profit).toBe(-10);
+  });
+
+  it('แจ้งว่าส่งไม่ทันเมื่อถึงหลัง 12:30', () => {
+    const [plan] = planner.propose([orderAt(1, 1, { north: 40 })]); // 40 กม. ที่ 30 กม./ชม. = 80 นาที
+
+    expect(plan.summary.allOnTime).toBe(false);
+    expect(plan.summary.lateStops).toBe(1);
+    expect(plan.routes[0].onTime).toBe(false);
+  });
+
+  it('คำนวณซ้ำด้วยข้อมูลเดิมได้ผลเดิม', () => {
+    const orders = randomOrders(25);
+    const keys = (round: number) => planner.propose(orders, round).map(p => p.key);
+
+    expect(keys(1)).toEqual(keys(1));
+    expect(keys(2)).toEqual(keys(2));
+  });
+
+  it('กดคำนวณใหม่ได้แผนที่ต่างจากที่เคยเสนอแล้ว', () => {
+    const orders = randomOrders(25);
+    const first = planner.propose(orders, 1);
+    const seen = first.map(p => p.key);
+    const second = planner.propose(orders, 2, seen);
+
+    expect(second.some(p => !seen.includes(p.key))).toBe(true);
+  });
+
+  it('เสนอหลายแบบ แผนที่ส่งทันและกำไรสูงสุดอยู่ก่อน', () => {
+    const plans = planner.propose(randomOrders(26));
+
+    expect(plans.length).toBeGreaterThanOrEqual(1);
+    for (let i = 1; i < plans.length; i++) {
+      expect(plans[i - 1].summary.profit).toBeGreaterThanOrEqual(plans[i].summary.profit);
+    }
+  });
+});

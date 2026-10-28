@@ -1,45 +1,85 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Observable } from 'rxjs';
-import { Api, CustomerRow, OrderRow, fullName } from '../../core/api';
-import { FOOD_COST, MAX_ORDERS, PRICE, baht } from '../../core/planner';
+import { DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { DeliveryService } from '../../services/delivery';
+import { BOX_COST, BOX_PRICE, MAX_BOXES_PER_ORDER, OrderInfo } from '../../models/order.model';
 
 @Component({
   selector: 'app-order',
-  standalone: true,
+  imports: [FormsModule, DecimalPipe],
   templateUrl: './order.html',
-  styleUrl: './order.css',
+  styleUrl: './order.css'
 })
 export class Order {
-  private api = inject(Api);
-  nm = fullName; baht = baht; max = MAX_ORDERS; price = PRICE; cost = FOOD_COST; opts = [1, 2, 3];
-  rows = signal<OrderRow[]>([]); customers = signal<CustomerRow[]>([]);
-  cid = signal(0); qty = signal(1); loading = signal(true); busy = signal(false); error = signal('');
-  boxes = computed(() => this.rows().reduce((a, o) => a + o.qty, 0));
-  riders = computed(() => Math.ceil(this.rows().length / MAX_ORDERS));
+  private readonly deliveryService = inject(DeliveryService);
+
+  readonly boxPrice = BOX_PRICE;
+  readonly boxCost = BOX_COST;
+  readonly maxBoxes = MAX_BOXES_PER_ORDER;
+  readonly boxOptions = Array.from({ length: MAX_BOXES_PER_ORDER }, (_, i) => i + 1);
+
+  // ข้อมูลมาจาก Service (ใช้ร่วมกับหน้าลูกค้าและหน้าจัดเส้นทาง)
+  readonly orders = this.deliveryService.orders;
+
+  // สถานะการคุยกับ backend (แสดงในหน้าจอ)
+  readonly apiError = this.deliveryService.error;
+  readonly loading = this.deliveryService.loading;
+
+  // ฟอร์มเพิ่มออเดอร์เอง
+  readonly selectedCustomerId = signal<number | null>(null);
+  readonly newQuantity = signal(1);
+
+  // ลูกค้าที่ยังไม่มีออเดอร์ (ลูกค้า 1 คน = 1 ออเดอร์)
+  readonly availableCustomers = computed(() => {
+    const ordered = new Set(this.orders().map(o => o.customerId));
+    return this.deliveryService.customers().filter(c => !ordered.has(c.id));
+  });
+
+  // สรุปยอด (คำนวณใหม่อัตโนมัติเมื่อออเดอร์เปลี่ยน)
+  readonly totalBoxes = computed(() => this.orders().reduce((sum, o) => sum + o.quantity, 0));
+  readonly totalRevenue = computed(() => this.totalBoxes() * BOX_PRICE);
+  readonly totalCost = computed(() => this.totalBoxes() * BOX_COST);
+  readonly totalProfit = computed(() => this.totalRevenue() - this.totalCost());
 
   constructor() {
-    this.load();
-    this.api.customers().subscribe({
-      next: c => { this.customers.set(c); if (!this.cid() && c.length) this.cid.set(c[0].customer_id); },
-      error: () => this.error.set('โหลดรายชื่อลูกค้าไม่ได้ จึงเพิ่มออเดอร์ใหม่ไม่ได้'),
-    });
+    // เปิดหน้าแล้วดึงลูกค้า/ออเดอร์ล่าสุดจากฐานข้อมูล
+    void this.deliveryService.refresh();
   }
 
-  load() {
-    this.api.orders().subscribe({
-      next: r => { this.rows.set(r); this.loading.set(false); },
-      error: () => { this.loading.set(false); this.error.set('โหลดออเดอร์ไม่ได้ ตรวจว่า API บน Render ยังทำงานอยู่ แล้วรีเฟรชหน้านี้'); },
-    });
+  async generateOrders() {
+    if (this.orders().length > 0 && !confirm('ออเดอร์เดิมทั้งหมดจะถูกแทนที่ด้วยออเดอร์สุ่มชุดใหม่ ดำเนินการต่อหรือไม่?')) {
+      return;
+    }
+    if (await this.deliveryService.simulateOrders()) {
+      this.selectedCustomerId.set(null);
+    }
   }
 
-  private run(obs: Observable<unknown>, msg: string) {
-    this.busy.set(true); this.error.set('');
-    obs.subscribe({ next: () => { this.busy.set(false); this.load(); }, error: () => { this.busy.set(false); this.error.set(msg); this.load(); } });
+  async clearOrders() {
+    if (!confirm('ลบออเดอร์ทั้งหมดในฐานข้อมูลใช่หรือไม่?')) {
+      return;
+    }
+    if (await this.deliveryService.clearOrders()) {
+      this.selectedCustomerId.set(null);
+    }
   }
 
-  add() { this.run(this.api.addOrder(this.cid(), this.qty()), 'เพิ่มออเดอร์ไม่ได้ ลองอีกครั้ง'); }
-  setQty(o: OrderRow, q: number) { this.run(this.api.editOrder(o.id, q), 'แก้ไขจำนวนกล่องไม่ได้ ลองอีกครั้ง'); }
-  remove(o: OrderRow) { this.run(this.api.delOrder(o.id), 'ลบออเดอร์ไม่ได้ ลองอีกครั้ง'); }
-  seed() { this.run(this.api.reseedOrders(), 'สุ่มออเดอร์จำลองไม่ได้ ลองอีกครั้ง'); }
-  clear() { if (confirm('ลบออเดอร์ทั้งหมด ?')) this.run(this.api.clearOrders(), 'ล้างออเดอร์ไม่ได้ ลองอีกครั้ง'); }
+  async addOrder() {
+    const customerId = this.selectedCustomerId();
+    if (customerId === null) {
+      return;
+    }
+    if (await this.deliveryService.addOrder(customerId, this.newQuantity())) {
+      this.selectedCustomerId.set(null);
+      this.newQuantity.set(1);
+    }
+  }
+
+  changeQuantity(order: OrderInfo, delta: number) {
+    return this.deliveryService.updateOrderQuantity(order.id, order.quantity + delta);
+  }
+
+  removeOrder(order: OrderInfo) {
+    return this.deliveryService.removeOrder(order.id);
+  }
 }

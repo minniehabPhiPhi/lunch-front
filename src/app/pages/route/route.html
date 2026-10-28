@@ -1,39 +1,176 @@
-<section class="card">
-  <div class="bar">
-    <button class="btn" (click)="build()" [disabled]="loading()">🪄 จัดเส้นทางใหม่ทั้งหมด</button>
-    <button class="btn ghost" (click)="next()" [disabled]="cand().length < 2">🔄 คำนวณใหม่ / ดูเส้นทางอื่น</button>
-    @if (cand().length) { <span class="muted">ทางเลือกที่ {{ idx() + 1 }}/{{ cand().length }}</span> }
+<div class="card">
+  <h3 class="title">🗺️ คำนวณจัดเส้นทางและแบ่งงานไรเดอร์</h3>
+
+  <div class="toolbar">
+    <button class="btn-primary" (click)="calculateRoutes()">
+      {{ plan() ? '🔄 ไม่ถูกใจ? คำนวณใหม่ (เสนอเส้นทางอื่น)' : '🚀 คำนวณจัดเส้นทางอัจฉริยะ' }}
+    </button>
+    <small class="hint">*เงื่อนไข: ไม่เกิน {{ maxOrders }} จุด/คน, ส่งถึงมือไม่เกิน 12:30 น.</small>
   </div>
-  @if (error()) { <p class="err">{{ error() }}</p> }
-  @if (loading()) { <p class="muted">กำลังโหลดออเดอร์... Render แบบฟรีอาจใช้เวลาปลุกเซิร์ฟเวอร์ประมาณ 1 นาที</p> }
-  @if (!loading() && !error() && !trips().length) { <p class="muted">ยังไม่มีออเดอร์ให้จัดเส้นทาง ไปหน้า "ออเดอร์" แล้วกด "สุ่มออเดอร์จำลอง"</p> }
-  @if (trips().length) {
-    <div class="kpis">
-      <div class="kpi"><span>ยอดขาย</span><b>{{ baht(s().sales) }}</b></div>
-      <div class="kpi"><span>ต้นทุนอาหาร</span><b>{{ baht(s().food) }}</b></div>
-      <div class="kpi"><span>ค่าส่งไรเดอร์</span><b>{{ baht(s().fee) }}</b></div>
-      <div class="kpi" [class.good]="s().profit >= 0" [class.bad]="s().profit < 0"><span>กำไร / ขาดทุน</span><b>{{ signed(s().profit) }}</b></div>
-      <div class="kpi"><span>ไรเดอร์</span><b>{{ s().riders }} คน</b></div>
-      <div class="kpi"><span>ระยะทางรวม</span><b>{{ s().km.toFixed(1) }} กม.</b></div>
-      <div class="kpi" [class.good]="!s().late" [class.bad]="s().late > 0"><span>ถึงคนสุดท้าย</span><b>{{ clock(s().last) }} น.</b></div>
-    </div>
-    @if (s().late) { <p class="err">⚠️ มี {{ s().late }} คนที่ถึงหลัง 12:30 น. กด "คำนวณใหม่ / ดูเส้นทางอื่น"</p> }
-    @else { <p class="okmsg">✅ ทุกจุดถึงก่อน 12:30 น. (ออกเดินทาง {{ clock(0) }} น., {{ speed }} กม./ชม.)</p> }
-    @if (s().profit < 0) { <p class="err">แผนนี้ขาดทุน กด "คำนวณใหม่ / ดูเส้นทางอื่น" เพื่อลองแผนอื่น</p> }
+
+  @if (errorMsg()) {
+    <div class="error">⚠️ {{ errorMsg() }}</div>
   }
-</section>
-<div class="grid2 route">
-  <div class="map" #mapEl></div>
-  <aside class="card">
-    <h2>เส้นทางไรเดอร์แต่ละคน</h2>
-    <div class="scroll tall">
-      @for (t of trips(); track t.id) {
-        <article class="rt" [class.late]="t.late" (click)="focus(t)">
-          <p class="rt-h"><i class="dot" [style.background]="t.color"></i><b>ไรเดอร์ {{ t.id }} · {{ code(t.id) }}</b></p>
-          <p>@for (s of t.stops; track s.id; let i = $index) { @if (i) { → } {{ i + 1 }}) {{ first(s.name) }} ({{ s.qty }}) }</p>
-          <small>{{ t.boxes }} กล่อง · {{ t.km.toFixed(1) }} กม. · ค่าส่ง {{ baht(t.fee) }} · ถึง {{ clock(t.arrive[t.arrive.length - 1]) }} น.</small>
-        </article>
+  @if (apiError()) {
+    <div class="error">⚠️ {{ apiError() }}</div>
+  }
+  @if (planOutdated()) {
+    <div class="warn">
+      ⚠️ ออเดอร์หรือข้อมูลลูกค้ามีการเปลี่ยนแปลง แผนเดิมใช้ไม่ได้แล้ว กรุณากดคำนวณจัดเส้นทางใหม่
+      @if (publishedCount() > 0) {
+        (ใบงานที่ไรเดอร์เห็นอยู่ยังเป็นของแผนเดิม)
       }
     </div>
-  </aside>
+  }
+  @if (notice()) {
+    <div class="warn">ℹ️ {{ notice() }}</div>
+  }
+
+  <p class="hint">
+    📦 ออเดอร์ที่รอจัดเส้นทาง: <b>{{ orders().length }}</b> รายการ ({{ totalBoxes() }} กล่อง)
+    @if (!plan()) {
+      · เมื่อคำนวณแล้วแผนที่จะขยายใหญ่ พร้อมเส้นทางของไรเดอร์แต่ละคนแยกตามสี
+    }
+  </p>
+
+  <!-- กล่องแสดงแผนที่ Leaflet (ขยายใหญ่เมื่อคำนวณเสร็จ) -->
+  <div #mapEl class="map" [class.large]="plan()"></div>
+
+  @if (plan(); as p) {
+    <!-- สีของไรเดอร์แต่ละคน (กดเพื่อเน้นเส้นทางนั้นบนแผนที่) -->
+    <div class="legend">
+      @for (r of p.routes; track r.jobCode) {
+        <button class="chip" [class.active]="highlight() === r.jobCode" (click)="toggleHighlight(r.jobCode)">
+          <span class="dot" [style.background]="r.color"></span>{{ r.jobCode }}
+        </button>
+      }
+      <small class="hint">กดที่สีหรือใบงานเพื่อเน้นเส้นทางของไรเดอร์คนนั้น</small>
+    </div>
+
+    <!-- สถานะการส่งใบงานให้ไรเดอร์ (เก็บในฐานข้อมูล ไรเดอร์เปิดหน้า 4 จากมือถือได้) -->
+    @switch (publishState()) {
+      @case ('saving') {
+        <div class="publish">⏳ กำลังส่งใบงานให้ไรเดอร์...</div>
+      }
+      @case ('saved') {
+        <div class="publish">
+          📤 ส่งใบงานให้ไรเดอร์แล้ว {{ publishedCount() }} ใบ — ไรเดอร์เปิดหน้า "4. ไรเดอร์" จากมือถือ แล้วกรอกรหัสใบงานได้เลย
+        </div>
+      }
+      @case ('error') {
+        <div class="error">
+          ⚠️ ส่งใบงานให้ไรเดอร์ไม่สำเร็จ ไรเดอร์จะยังไม่เห็นแผนนี้
+          <button class="btn-retry" (click)="retryPublish()">ส่งอีกครั้ง</button>
+        </div>
+      }
+    }
+
+    <!-- สถานะความสำเร็จ -->
+    @if (p.summary.allOnTime) {
+      <div class="success">
+        ✓ จัดเส้นทางสำเร็จ! ทุกจุดจัดส่งเสร็จสิ้นก่อนเวลา 12:30 น. (ลูกค้าคนสุดท้ายได้รับของ {{ p.summary.lastArrivalTime }})
+      </div>
+    } @else {
+      <div class="error">
+        ✗ มี {{ p.summary.lateStops }} จุดที่ส่งถึงหลัง 12:30 น. — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นด้านล่าง
+      </div>
+    }
+    @if (p.summary.profit < 0) {
+      <div class="error">
+        ⚠️ แผนนี้ <b>ขาดทุน {{ abs(p.summary.profit) | number:'1.0-0' }} ฿</b> — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นเพื่อหาเส้นทางที่ไม่ขาดทุน
+      </div>
+    }
+
+    <!-- ภาพรวมค่าใช้จ่าย กำไร/ขาดทุน และเวลาที่ใช้ -->
+    <div class="summary">
+      <div class="sum-cell sum-gray">
+        <small>ไรเดอร์ที่ใช้</small>
+        <h4>{{ p.summary.riders }} คน</h4>
+        <small>{{ p.summary.orders }} ออเดอร์ · {{ p.summary.boxes }} กล่อง</small>
+      </div>
+      <div class="sum-cell sum-gray">
+        <small>ระยะทางรวม</small>
+        <h4>{{ p.summary.distanceKm | number:'1.1-1' }} กม.</h4>
+        <small>ไรเดอร์ทุกคนรวมกัน</small>
+      </div>
+      <div class="sum-cell sum-orange">
+        <small>เวลาที่ใช้นานสุด</small>
+        <h4 class="orange">{{ p.summary.longestMin }} นาที</h4>
+        <small>ลูกค้าคนสุดท้ายได้รับของ {{ p.summary.lastArrivalTime }}</small>
+      </div>
+      <div class="sum-cell sum-green">
+        <small>รายได้</small>
+        <h4 class="green">{{ p.summary.revenue | number }} ฿</h4>
+        <small>ต้นทุนข้าว {{ p.summary.foodCost | number }} ฿</small>
+      </div>
+      <div class="sum-cell sum-orange">
+        <small>ค่าไรเดอร์รวม</small>
+        <h4 class="orange">{{ p.summary.riderCost | number }} ฿</h4>
+        <small>ค่าเรียก {{ p.summary.tripFees | number }} + ค่าระยะทาง {{ p.summary.distanceFees | number }}</small>
+      </div>
+      <div class="sum-cell" [class.sum-green]="p.summary.profit >= 0" [class.sum-red]="p.summary.profit < 0">
+        <small>{{ p.summary.profit >= 0 ? 'กำไรสุทธิ' : 'ขาดทุน' }}</small>
+        <h4 [class.green]="p.summary.profit >= 0" [class.red]="p.summary.profit < 0">
+          {{ abs(p.summary.profit) | number }} ฿
+        </h4>
+        <small>รายได้ − ต้นทุนข้าว − ค่าไรเดอร์</small>
+      </div>
+    </div>
+
+    <!-- ทางเลือกเส้นทางที่ระบบเสนอ -->
+    <h4 class="list-title">🔀 ทางเลือกเส้นทางที่ระบบเสนอ (ชุดที่ {{ round() }})</h4>
+    <div class="alts">
+      @for (alt of proposals(); track alt.key; let i = $index) {
+        <button class="alt" [class.selected]="i === selectedIndex()" (click)="selectPlan(i)">
+          <span class="alt-title">
+            {{ strategyLabel(alt) }}
+            @if (i === 0) {
+              <span class="tag">แนะนำ</span>
+            }
+          </span>
+          <b [class.green]="alt.summary.profit >= 0" [class.red]="alt.summary.profit < 0">
+            {{ alt.summary.profit >= 0 ? 'กำไร' : 'ขาดทุน' }} {{ abs(alt.summary.profit) | number }} ฿
+          </b>
+          <small>
+            {{ alt.summary.riders }} คน · {{ alt.summary.distanceKm | number:'1.1-1' }} กม. · ส่งเสร็จ {{ alt.summary.lastArrivalTime }}
+          </small>
+        </button>
+      }
+    </div>
+    <p class="hint">{{ strategyHint(p) }}</p>
+
+    <!-- รายการใบงานที่ระบบแบ่งให้ไรเดอร์ -->
+    <div class="grid">
+      @for (del of p.routes; track del.jobCode) {
+        <div
+          class="job"
+          tabindex="0"
+          [class.selected]="highlight() === del.jobCode"
+          [style.border-left]="'5px solid ' + del.color"
+          (click)="toggleHighlight(del.jobCode)"
+          (keydown.enter)="toggleHighlight(del.jobCode)"
+        >
+          <div class="job-head">
+            <h4>{{ del.jobCode }} ({{ del.riderName }})</h4>
+            <span class="badge" [style.background]="del.color">{{ del.totalBoxes }} กล่อง</span>
+          </div>
+
+          <p class="job-meta">
+            📏 ระยะทาง: <b>{{ del.distanceKm | number:'1.1-1' }} กม.</b> | ⏱️ เวลาโดยประมาณ: <b>{{ del.durationMin }} นาที</b><br>
+            💸 ค่าไรเดอร์: <b>{{ del.cost | number }} ฿</b>
+            <small>(ค่าเรียก {{ del.tripFee }} + ระยะทาง {{ del.distanceFee | number }})</small>
+          </p>
+
+          <ol>
+            @for (s of del.stops; track s.orderId) {
+              <li>
+                {{ s.name }} (<b>{{ s.boxes }} กล่อง</b>)
+                <small [class.late]="s.arrivalMin > deadlineMin">ถึง {{ s.time }}</small>
+              </li>
+            }
+          </ol>
+        </div>
+      }
+    </div>
+  }
 </div>

@@ -18,7 +18,8 @@
     "@angular/platform-browser": "^22.2.0",
     "@angular/router": "^22.2.0",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "daisyui": "^5.7.50"
   },
   "devDependencies": {
     "@angular/build": "^22.2.3",
@@ -27,6 +28,9 @@
     "jsdom": "^30.0.0",
     "prettier": "^3.8.1",
     "typescript": "~6.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "@tailwindcss/postcss": "^4.3.3",
+    "postcss": "^8.5.30",
+    "tailwindcss": "^4.1.12"
   }
 }

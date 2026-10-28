@@ -1,90 +1,269 @@
-import { Component, ElementRef, ViewChild, AfterViewInit, computed, inject, signal } from '@angular/core';
-import { Api, CustomerRow, firstName, fullName, splitName, toBody, val } from '../../core/api';
-import { Store } from '../../core/store';
-import { around, baseLayer, esc, makeMap, ok } from '../../core/map';
-declare const L: any;
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild
+} from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { DeliveryService } from '../../services/delivery';
+import { CustomerForm, CustomerInfo } from '../../models/customer.model';
+import { DELIVERY_RADIUS_KM, SHOP_LOCATION, distanceKm } from '../../utils/geo';
+
+declare let L: any; // Leaflet (โหลดจาก index.html)
+
+// กัน HTML แทรกในชื่อลูกค้าตอนแสดง popup บนแผนที่
+function escapeHtml(text: string): string {
+  const map: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return text.replace(/[&<>"']/g, ch => map[ch] ?? ch);
+}
 
 @Component({
   selector: 'app-customer',
-  standalone: true,
+  imports: [FormsModule, DecimalPipe],
   templateUrl: './customer.html',
-  styleUrl: './customer.css',
+  styleUrl: './customer.css'
 })
-export class Customer implements AfterViewInit {
-  private api = inject(Api); private store = inject(Store);
-  @ViewChild('mapEl') mapEl!: ElementRef<HTMLElement>;
-  v = val; nm = fullName;
-  rows = signal<CustomerRow[]>([]); ordered = signal(new Set<number>());
-  loading = signal(true); busy = signal(false); error = signal('');
-  name = signal(''); phone = signal(''); lat = signal(''); lng = signal('');
-  valid = computed(() => this.name().trim() !== '' && this.lat().trim() !== '' && this.lng().trim() !== '' && ok(+this.lat(), +this.lng()));
-  private map: any; private layer: any; private base: any; private pick: any; private markers = new Map<number, any>();
+export class Customer {
+  private readonly deliveryService = inject(DeliveryService);
 
-  ngAfterViewInit() {
-    this.map = makeMap(this.mapEl.nativeElement, this.store.shop());
-    this.map.fitBounds(around(this.store.shop()));
-    this.layer = L.layerGroup().addTo(this.map);
-    this.drawBase();
-    this.map.on('click', (e: any) => { this.lat.set(e.latlng.lat.toFixed(6)); this.lng.set(e.latlng.lng.toFixed(6)); this.drawPick(); });
-    this.load();
-    this.api.orders().subscribe({ next: r => { this.ordered.set(new Set(r.map(o => o.customer_id))); this.draw(); }, error: () => { /* แผนที่ยังใช้ได้ แค่ไม่แยกสีตามออเดอร์ */ } });
+  readonly radiusKm = DELIVERY_RADIUS_KM;
+
+  // ฟอร์มรับข้อมูล
+  readonly name = signal('');
+  readonly phone = signal('');
+  readonly address = signal('');
+  readonly lat = signal(String(SHOP_LOCATION.lat));
+  readonly lng = signal(String(SHOP_LOCATION.lng));
+
+  // null = โหมดเพิ่มลูกค้าใหม่, มีค่า = กำลังแก้ไขลูกค้าคนนั้น
+  readonly editingId = signal<number | null>(null);
+  readonly errorMsg = signal('');
+
+  // สถานะการคุยกับ backend (แสดงในหน้าจอ)
+  readonly apiError = this.deliveryService.error;
+  readonly loading = this.deliveryService.loading;
+
+  // รายการลูกค้า (มาจาก Service) พร้อมระยะห่างจากร้าน
+  readonly customers = computed(() =>
+    this.deliveryService.customers().map(c => ({
+      ...c,
+      distance: distanceKm(SHOP_LOCATION, c)
+    }))
+  );
+
+  // ---------- แผนที่ ----------
+  private readonly mapEl = viewChild.required<ElementRef<HTMLElement>>('mapEl');
+  private readonly mapReady = signal(false);
+  private map: any;
+  private pin: any;
+  private customerLayer: any;
+  private markers = new Map<number, any>();
+
+  constructor() {
+    // เปิดหน้าแล้วดึงรายชื่อลูกค้าล่าสุดจากฐานข้อมูล
+    void this.deliveryService.refresh();
+
+    // สร้างแผนที่หลังจาก template ถูกวาดลงหน้าเว็บแล้ว
+    afterNextRender(() => this.initMap());
+
+    // ลูกค้าเปลี่ยน (เพิ่ม/แก้/ลบ) -> วาดหมุดบนแผนที่ใหม่
+    effect(() => {
+      const list = this.customers();
+      if (this.mapReady()) {
+        this.drawCustomers(list);
+      }
+    });
+
+    // พิมพ์ละติจูด/ลองจิจูดในฟอร์ม -> ย้ายหมุด 📍 ตาม
+    effect(() => {
+      const lat = this.parseCoord(this.lat());
+      const lng = this.parseCoord(this.lng());
+      if (this.mapReady() && Number.isFinite(lat) && Number.isFinite(lng)) {
+        this.pin.setLatLng([lat, lng]);
+      }
+    });
+
+    inject(DestroyRef).onDestroy(() => this.map?.remove());
   }
 
-  load() {
-    this.api.customers().subscribe({
-      next: r => { this.rows.set(r); this.loading.set(false); this.draw(); },
-      error: () => { this.loading.set(false); this.error.set('โหลดรายชื่อลูกค้าไม่ได้ ตรวจว่า API บน Render ยังทำงานอยู่ แล้วรีเฟรชหน้านี้'); },
+  private initMap() {
+    if (typeof L === 'undefined') {
+      return; // Leaflet ไม่ถูกโหลด (เช่นตอนรันเทสต์)
+    }
+
+    const shop = [SHOP_LOCATION.lat, SHOP_LOCATION.lng];
+    this.map = L.map(this.mapEl().nativeElement);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(this.map);
+
+    // วงรัศมีจัดส่ง 3 กม. (ขอบเขตของวงคำนวณจากพิกัดร้านโดยตรง เพราะแผนที่ยังไม่มีมุมมองตอนนี้)
+    L.circle(shop, {
+      radius: DELIVERY_RADIUS_KM * 1000,
+      color: '#e65100',
+      weight: 1,
+      dashArray: '6',
+      fillOpacity: 0.05,
+      interactive: false
+    }).addTo(this.map);
+    this.map.fitBounds(L.latLng(shop).toBounds(DELIVERY_RADIUS_KM * 2000));
+
+    L.marker(shop, { icon: this.emojiIcon('🏪', 28) })
+      .addTo(this.map)
+      .bindPopup('<b>ร้านข้าวกล่องส่งด่วน</b>');
+
+    this.customerLayer = L.layerGroup().addTo(this.map);
+
+    // หมุดเลือกตำแหน่งบ้านลูกค้า (ลากได้)
+    this.pin = L.marker(shop, { draggable: true, icon: this.emojiIcon('📍', 30, 'bottom') }).addTo(this.map);
+    this.pin.on('dragend', () => {
+      const p = this.pin.getLatLng();
+      this.setPosition(p.lat, p.lng);
+    });
+    this.map.on('click', (e: any) => this.setPosition(e.latlng.lat, e.latlng.lng));
+
+    this.mapReady.set(true);
+  }
+
+  private emojiIcon(emoji: string, size: number, anchor: 'center' | 'bottom' = 'center') {
+    return L.divIcon({
+      html: `<div style="font-size:${size}px;line-height:1">${emoji}</div>`,
+      className: '',
+      iconSize: [size, size],
+      iconAnchor: anchor === 'center' ? [size / 2, size / 2] : [size / 2, size]
     });
   }
 
-  private drawBase() {
-    this.base?.remove();
-    this.base = baseLayer(this.store.shop(), p => { this.store.setShop(p); this.drawBase(); }).addTo(this.map);
-  }
+  private drawCustomers(list: CustomerInfo[]) {
+    this.customerLayer.clearLayers();
+    this.markers.clear();
 
-  private draw() {
-    this.layer.clearLayers(); this.markers.clear();
-    for (const c of this.rows()) {
-      const la = +c.latitude, ln = +c.longitude;
-      if (!ok(la, ln)) continue;
-      const on = this.ordered().has(c.customer_id);
-      const m = L.marker([la, ln], { icon: L.divIcon({ className: 'cm' + (on ? ' on' : ''), html: `<i></i><b>${esc(firstName(c.first_name))}</b>`, iconSize: [0, 0] }) })
-        .bindPopup(`<b>${esc(fullName(c))}</b><br>${esc(c.phone_number)}`).addTo(this.layer);
-      this.markers.set(c.customer_id, m);
+    for (const c of list) {
+      const marker = L.circleMarker([c.lat, c.lng], {
+        color: '#e65100',
+        fillColor: '#e65100',
+        fillOpacity: 0.8,
+        radius: 8,
+        bubblingMouseEvents: false // คลิกหมุดลูกค้าแล้วไม่ให้หมุด 📍 ย้ายตาม
+      })
+        .bindPopup(`<b>${escapeHtml(c.name)}</b><br>โทร ${escapeHtml(c.phone)}`)
+        .addTo(this.customerLayer);
+      this.markers.set(c.id, marker);
     }
   }
 
-  drawPick() {
-    this.pick?.remove(); this.pick = null;
-    if (this.lat().trim() === '' || this.lng().trim() === '' || !ok(+this.lat(), +this.lng())) return;
-    this.pick = L.circleMarker([+this.lat(), +this.lng()], { radius: 10, color: '#dc2626', weight: 3, fill: false }).addTo(this.map);
+  // คลิกแผนที่ / ลากหมุด -> กรอกพิกัดลงฟอร์มให้อัตโนมัติ
+  private setPosition(lat: number, lng: number) {
+    this.lat.set(lat.toFixed(6));
+    this.lng.set(lng.toFixed(6));
+    this.errorMsg.set('');
   }
 
-  coord(c: CustomerRow) { return `${(+c.latitude).toFixed(4)}, ${(+c.longitude).toFixed(4)}`; }
-  show(c: CustomerRow) { if (ok(+c.latitude, +c.longitude)) { this.map.setView([+c.latitude, +c.longitude], 16); this.markers.get(c.customer_id)?.openPopup(); } }
+  // ---------- ฟังก์ชันกดปุ่ม ----------
+  async saveCustomer() {
+    const data = this.validate();
+    if (!data) {
+      return;
+    }
 
-  add() {
-    this.busy.set(true); this.error.set('');
-    this.api.addCustomer({ ...splitName(this.name()), phone_number: this.phone().trim(), latitude: +this.lat(), longitude: +this.lng(), address_detail: '' }).subscribe({
-      next: () => { this.busy.set(false); this.name.set(''); this.phone.set(''); this.lat.set(''); this.lng.set(''); this.drawPick(); this.load(); },
-      error: () => { this.busy.set(false); this.error.set('เพิ่มลูกค้าไม่ได้ ตรวจข้อมูลแล้วลองอีกครั้ง'); },
-    });
+    const id = this.editingId();
+    const ok =
+      id === null
+        ? await this.deliveryService.addCustomer(data)
+        : await this.deliveryService.updateCustomer(id, data);
+    if (!ok) {
+      return; // บันทึกไม่สำเร็จ: เก็บข้อมูลในฟอร์มไว้ ข้อความ error แสดงอยู่ด้านบน
+    }
+
+    if (id !== null) {
+      this.lat.set(String(SHOP_LOCATION.lat));
+      this.lng.set(String(SHOP_LOCATION.lng));
+    }
+
+    // ล้างค่าฟอร์ม
+    this.name.set('');
+    this.phone.set('');
+    this.address.set('');
+    this.editingId.set(null);
+    this.errorMsg.set('');
   }
 
-  rename(c: CustomerRow, e: Event) {
-    const n = splitName(val(e));
-    if (!n.first_name) { this.load(); return; }
-    this.save(c, n);
-  }
-  rephone(c: CustomerRow, e: Event) { this.save(c, { phone_number: val(e).trim() }); }
-  private save(c: CustomerRow, patch: Partial<ReturnType<typeof toBody>>) {
-    this.error.set('');
-    this.api.editCustomer(c.customer_id, toBody(c, patch)).subscribe({ next: () => this.load(), error: () => this.error.set('บันทึกข้อมูลลูกค้าไม่ได้ ลองอีกครั้ง') });
+  startEdit(c: CustomerInfo) {
+    this.editingId.set(c.id);
+    this.name.set(c.name);
+    this.phone.set(c.phone);
+    this.address.set(c.address);
+    this.lat.set(String(c.lat));
+    this.lng.set(String(c.lng));
+    this.errorMsg.set('');
+    this.focusOn(c);
   }
 
-  remove(c: CustomerRow) {
-    if (!confirm(`ลบลูกค้า ${fullName(c)} ?`)) return;
-    this.error.set('');
-    this.api.delCustomer(c.customer_id).subscribe({ next: () => this.load(), error: () => this.error.set('ลบลูกค้าไม่ได้ ลูกค้าคนนี้อาจยังมีออเดอร์อยู่ ให้ลบออเดอร์ก่อน') });
+  cancelEdit() {
+    this.editingId.set(null);
+    this.name.set('');
+    this.phone.set('');
+    this.address.set('');
+    this.lat.set(String(SHOP_LOCATION.lat));
+    this.lng.set(String(SHOP_LOCATION.lng));
+    this.errorMsg.set('');
+  }
+
+  async removeCustomer(c: CustomerInfo) {
+    if (!confirm(`ลบลูกค้า "${c.name}" ใช่หรือไม่? (ออเดอร์ของลูกค้าคนนี้จะถูกลบด้วย)`)) {
+      return;
+    }
+    const ok = await this.deliveryService.removeCustomer(c.id);
+    if (ok && this.editingId() === c.id) {
+      this.cancelEdit();
+    }
+  }
+
+  // กดพิกัดในรายการ -> แผนที่ซูมไปที่บ้านลูกค้าและเปิด popup
+  focusOn(c: CustomerInfo) {
+    if (!this.map) {
+      return;
+    }
+    this.map.flyTo([c.lat, c.lng], Math.max(this.map.getZoom(), 15));
+    this.markers.get(c.id)?.openPopup();
+  }
+
+  // ---------- ตรวจสอบข้อมูลฟอร์ม ----------
+  private validate(): CustomerForm | null {
+    const name = this.name().trim();
+    const phone = this.phone().replace(/[\s-]/g, '');
+    const address = this.address().trim();
+    const lat = this.parseCoord(this.lat());
+    const lng = this.parseCoord(this.lng());
+
+    if (!name || !phone || !address) {
+      this.errorMsg.set('กรุณากรอกชื่อ เบอร์โทร และที่อยู่ให้ครบถ้วนครับ');
+      return null;
+    }
+    if (!/^0\d{8,9}$/.test(phone)) {
+      this.errorMsg.set('เบอร์โทรไม่ถูกต้อง (ตัวเลข 9-10 หลัก ขึ้นต้นด้วย 0)');
+      return null;
+    }
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      this.errorMsg.set('พิกัดไม่ถูกต้อง กรุณาคลิกเลือกตำแหน่งบนแผนที่ หรือกรอกตัวเลขละติจูด/ลองจิจูด');
+      return null;
+    }
+    const dist = distanceKm(SHOP_LOCATION, { lat, lng });
+    if (dist > DELIVERY_RADIUS_KM) {
+      this.errorMsg.set(`บ้านลูกค้าอยู่ห่างร้าน ${dist.toFixed(1)} กม. เกินรัศมีจัดส่ง ${DELIVERY_RADIUS_KM} กม.`);
+      return null;
+    }
+
+    return { name, phone, lat, lng, address };
+  }
+
+  private parseCoord(value: string): number {
+    return value.trim() === '' ? NaN : Number(value);
   }
 }
