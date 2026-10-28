@@ -108,7 +108,7 @@ export class Route {
     this.radiusBounds = L.latLng(shop).toBounds(DELIVERY_RADIUS_KM * 2000);
     L.circle(shop, {
       radius: DELIVERY_RADIUS_KM * 1000,
-      color: '#e65100',
+      color: '#2e7d5b',
       weight: 1,
       dashArray: '6',
       fillOpacity: 0.05,
@@ -145,7 +145,7 @@ export class Route {
       // ยังไม่คำนวณ: แสดงจุดออเดอร์ที่รอจัดเส้นทาง
       for (const o of orders) {
         points.push([o.lat, o.lng]);
-        L.circleMarker([o.lat, o.lng], { color: '#8d6e63', fillColor: '#8d6e63', fillOpacity: 0.7, radius: 6 })
+        L.circleMarker([o.lat, o.lng], { color: '#6b8f7e', fillColor: '#6b8f7e', fillOpacity: 0.7, radius: 6 })
           .bindPopup(`<b>${escapeHtml(o.customerName)}</b><br>${o.quantity} กล่อง · รอจัดเส้นทาง`)
           .addTo(this.layer);
       }

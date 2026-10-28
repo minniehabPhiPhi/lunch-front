@@ -7,7 +7,7 @@
 
 .title {
   margin-top: 0;
-  color: #333;
+  color: #5d4037;
 }
 
 .hint {
@@ -25,7 +25,7 @@
 
 .btn-primary {
   padding: 10px 20px;
-  background: #e65100;
+  background: #2e7d5b;
   color: white;
   border: none;
   border-radius: 8px;
@@ -112,8 +112,8 @@
 }
 
 .chip.active {
-  border-color: #e65100;
-  background: #fff3e0;
+  border-color: #2e7d5b;
+  background: #e7f4ec;
 }
 
 .dot {
@@ -150,7 +150,7 @@
 }
 
 .sum-orange {
-  background: #fff3e0;
+  background: #f5efea;
 }
 
 .sum-green {
@@ -162,7 +162,7 @@
 }
 
 .orange {
-  color: #e65100;
+  color: #6d4c41;
 }
 
 .green {
@@ -200,8 +200,8 @@
 }
 
 .alt.selected {
-  border-color: #e65100;
-  background: #fff3e0;
+  border-color: #2e7d5b;
+  background: #e7f4ec;
 }
 
 .alt-title {
@@ -212,7 +212,7 @@
 .tag {
   margin-left: 4px;
   padding: 1px 6px;
-  background: #e65100;
+  background: #2e7d5b;
   color: white;
   border-radius: 10px;
   font-size: 11px;
@@ -235,7 +235,7 @@
 }
 
 .job.selected {
-  background: #fff3e0;
+  background: #e7f4ec;
 }
 
 .job-head {

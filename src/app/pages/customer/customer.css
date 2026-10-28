@@ -7,7 +7,7 @@
 
 .title {
   margin-top: 0;
-  color: #333;
+  color: #5d4037;
 }
 
 .hint {
@@ -50,7 +50,7 @@
 
 .btn-primary {
   padding: 10px 20px;
-  background: #e65100;
+  background: #2e7d5b;
   color: white;
   border: none;
   border-radius: 8px;
@@ -60,8 +60,9 @@
 
 .btn-secondary {
   padding: 10px 16px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
+  background: #fff;
+  color: #5d4037;
+  border: 1px solid #bcaaa4;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -91,7 +92,7 @@
 }
 
 .row.editing {
-  background: #fff3e0;
+  background: #e7f4ec;
 }
 
 .phone {
@@ -115,7 +116,7 @@
 }
 
 .coord:hover {
-  color: #e65100;
+  color: #2e7d5b;
   text-decoration: underline;
 }
 

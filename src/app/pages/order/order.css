@@ -7,7 +7,7 @@
 
 .title {
   margin-top: 0;
-  color: #333;
+  color: #5d4037;
 }
 
 .hint {
@@ -24,7 +24,7 @@
 
 .btn-primary {
   padding: 10px 16px;
-  background: #e65100;
+  background: #2e7d5b;
   color: white;
   border: none;
   border-radius: 8px;
@@ -39,8 +39,9 @@
 
 .btn-secondary {
   padding: 10px 16px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
+  background: #fff;
+  color: #5d4037;
+  border: 1px solid #bcaaa4;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -98,7 +99,7 @@
 }
 
 .sum-orange {
-  background: #fff3e0;
+  background: #f5efea;
 }
 
 .sum-green {
@@ -106,7 +107,7 @@
 }
 
 .orange {
-  color: #e65100;
+  color: #6d4c41;
 }
 
 .green {
@@ -141,8 +142,8 @@ td {
 }
 
 .badge {
-  background: #fff3e0;
-  color: #e65100;
+  background: #e7f4ec;
+  color: #2e7d5b;
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 12px;
@@ -159,7 +160,7 @@ td {
 .qty-num {
   min-width: 14px;
   text-align: center;
-  color: #e65100;
+  color: #2e7d5b;
   font-weight: bold;
 }
 

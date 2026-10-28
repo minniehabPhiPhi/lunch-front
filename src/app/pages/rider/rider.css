@@ -9,7 +9,7 @@
 
 .title {
   margin: 0;
-  color: #333;
+  color: #5d4037;
 }
 
 .head {
@@ -23,9 +23,9 @@
 .btn-reload {
   padding: 6px 12px;
   border-radius: 16px;
-  border: 1px solid #e65100;
-  background: #fff3e0;
-  color: #e65100;
+  border: 1px solid #2e7d5b;
+  background: #e7f4ec;
+  color: #2e7d5b;
   font-weight: bold;
   cursor: pointer;
   white-space: nowrap;
@@ -76,9 +76,9 @@
 }
 
 .chip.active {
-  border-color: #e65100;
-  background: #fff3e0;
-  color: #e65100;
+  border-color: #2e7d5b;
+  background: #e7f4ec;
+  color: #2e7d5b;
   font-weight: bold;
 }
 
@@ -96,7 +96,7 @@ hr {
 
 .tile {
   flex: 1;
-  background: #fff8f0;
+  background: #f5efea;
   padding: 10px;
   border-radius: 8px;
   text-align: center;
@@ -108,7 +108,7 @@ hr {
 
 .tile h3 {
   margin: 5px 0;
-  color: #e65100;
+  color: #6d4c41;
 }
 
 .route-line {
@@ -133,7 +133,7 @@ hr {
 }
 
 .step-no {
-  background: #e65100;
+  background: #2e7d5b;
   color: white;
   border-radius: 50%;
   width: 28px;
@@ -165,7 +165,7 @@ hr {
   box-sizing: border-box;
   padding: 12px;
   margin-top: 15px;
-  background: #e65100;
+  background: #2e7d5b;
   color: white;
   text-align: center;
   text-decoration: none;

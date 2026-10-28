@@ -107,7 +107,7 @@ export class Customer {
     // วงรัศมีจัดส่ง 3 กม. (ขอบเขตของวงคำนวณจากพิกัดร้านโดยตรง เพราะแผนที่ยังไม่มีมุมมองตอนนี้)
     L.circle(shop, {
       radius: DELIVERY_RADIUS_KM * 1000,
-      color: '#e65100',
+      color: '#2e7d5b',
       weight: 1,
       dashArray: '6',
       fillOpacity: 0.05,
@@ -142,8 +142,8 @@ export class Customer {
 
     for (const c of list) {
       const marker = L.circleMarker([c.lat, c.lng], {
-        color: '#e65100',
-        fillColor: '#e65100',
+        color: '#2e7d5b',
+        fillColor: '#2e7d5b',
         fillOpacity: 0.8,
         radius: 8,
         bubblingMouseEvents: false // คลิกหมุดลูกค้าแล้วไม่ให้หมุดเลือกตำแหน่งย้ายตาม

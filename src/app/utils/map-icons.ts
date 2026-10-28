@@ -5,7 +5,7 @@
 export const SHOP_ICON = {
   html:
     '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">' +
-    '<rect x="1" y="1" width="28" height="28" rx="7" fill="#4E342E" stroke="#fff" stroke-width="2"/>' +
+    '<rect x="1" y="1" width="28" height="28" rx="7" fill="#5d4037" stroke="#fff" stroke-width="2"/>' +
     '<path d="M8 13.5 9.5 9h11l1.5 4.5M8 13.5h14M9.5 13.5V21h11v-7.5M13 21v-4h4v4" ' +
     'fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>' +
     '</svg>',
