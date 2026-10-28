@@ -80,6 +80,7 @@ export interface RoutePlan {
   strategies: RouteStrategy[]; // วิธีที่ให้ผลลัพธ์แผนนี้ (อาจตรงกันหลายวิธี)
   routes: RiderRoute[];
   summary: PlanSummary;
+  distanceMode: 'road' | 'straight'; // ระยะทางที่ใช้คำนวณ: ตามถนนจริง หรือเส้นตรง (เรียกบริการแผนที่ไม่ได้)
 }
 
 // ชุดข้อเสนอที่เก็บไว้ใน DeliveryService

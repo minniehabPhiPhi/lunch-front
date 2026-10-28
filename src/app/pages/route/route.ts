@@ -8,11 +8,13 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { DeliveryService } from '../../services/delivery';
 import { RoutePlannerService } from '../../services/route-planner';
+import { RoadNetworkService } from '../../services/road-network';
 import { OrderInfo } from '../../models/order.model';
 import {
   DEADLINE_MINUTES,
@@ -23,6 +25,10 @@ import { DELIVERY_RADIUS_KM, SHOP_LOCATION } from '../../utils/geo';
 import { SHOP_ICON } from '../../utils/map-icons';
 
 declare let L: any; // Leaflet (โหลดจาก index.html)
+
+// เว้นระยะระหว่างคำขอเส้นทางไปเซิร์ฟเวอร์แผนที่ฟรี (ไม่ยิงถี่เกินไป)
+const PATH_REQUEST_GAP_MS = 1000;
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 // กัน HTML แทรกในชื่อลูกค้าตอนแสดง popup บนแผนที่
 function escapeHtml(text: string): string {
@@ -39,6 +45,7 @@ function escapeHtml(text: string): string {
 export class Route {
   private readonly deliveryService = inject(DeliveryService);
   private readonly planner = inject(RoutePlannerService);
+  private readonly roads = inject(RoadNetworkService);
   private readonly injector = inject(Injector);
 
   readonly maxOrders = MAX_ORDERS_PER_RIDER;
@@ -61,6 +68,15 @@ export class Route {
   // ใบงานที่กำลังเน้นบนแผนที่ (null = แสดงทุกเส้นเท่ากัน)
   readonly highlight = signal<string | null>(null);
 
+  // ---------- เส้นทางตามถนนจริง ----------
+  // กำลังขอระยะทางจากบริการแผนที่ + คำนวณ (ปุ่มกดไม่ได้ระหว่างนี้)
+  readonly computing = signal(false);
+  // เส้นทางตามถนนของแต่ละใบงาน: "<แผน>|<รหัสใบงาน>" -> พิกัดตามถนน
+  private readonly roadPaths = signal<Record<string, [number, number][]>>({});
+  // ความคืบหน้าการโหลดเส้นทางตามถนนมาวาดบนแผนที่
+  readonly pathProgress = signal({ done: 0, total: 0 });
+  private pathRun = 0; // เลขรอบการโหลด (เปลี่ยนแผนแล้ว รอบเก่าจะหยุดเอง)
+
   // ---------- แผนที่ ----------
   private readonly mapEl = viewChild.required<ElementRef<HTMLElement>>('mapEl');
   private readonly mapReady = signal(false);
@@ -76,17 +92,34 @@ export class Route {
     // สร้างแผนที่หลังจาก template ถูกวาดลงหน้าเว็บแล้ว
     afterNextRender(() => this.initMap());
 
-    // ออเดอร์ / แผนที่เลือก / ใบงานที่เน้น เปลี่ยน -> วาดแผนที่ใหม่
+    // ออเดอร์ / แผนที่เลือก / ใบงานที่เน้น / เส้นทางตามถนน เปลี่ยน -> วาดแผนที่ใหม่
     effect(() => {
       const plan = this.plan();
       const orders = this.orders();
       const highlight = this.highlight();
+      const paths = this.roadPaths();
       if (this.mapReady()) {
-        this.draw(plan, orders, highlight);
+        this.draw(plan, orders, highlight, paths);
       }
     });
 
-    inject(DestroyRef).onDestroy(() => this.map?.remove());
+    // ได้แผนที่คำนวณด้วยระยะทางตามถนน -> โหลดเส้นทางตามถนนมาวาดแทนเส้นตรง
+    effect(() => {
+      const plan = this.plan();
+      untracked(() => {
+        if (plan?.distanceMode === 'road') {
+          void this.loadRoadPaths(plan);
+        } else {
+          this.pathRun++; // หยุดการโหลดรอบก่อน (ถ้ามี)
+          this.pathProgress.set({ done: 0, total: 0 });
+        }
+      });
+    });
+
+    inject(DestroyRef).onDestroy(() => {
+      this.pathRun++;
+      this.map?.remove();
+    });
   }
 
   private initMap() {
@@ -117,6 +150,8 @@ export class Route {
       .bindPopup('<b>ร้านข้าวกล่องส่งด่วน</b><br>จุดออกเดินทาง 11:30 น.');
 
     this.layer = L.layerGroup().addTo(this.map);
+    // ให้เครดิตบริการเส้นทาง (ตามเงื่อนไขการใช้งานของ OSRM)
+    this.map.attributionControl.addAttribution('เส้นทาง © <a href="https://project-osrm.org/" target="_blank" rel="noopener">OSRM</a>');
     this.mapReady.set(true);
   }
 
@@ -133,7 +168,12 @@ export class Route {
     });
   }
 
-  private draw(plan: RoutePlan | null, orders: OrderInfo[], highlight: string | null) {
+  private draw(
+    plan: RoutePlan | null,
+    orders: OrderInfo[],
+    highlight: string | null,
+    paths: Record<string, [number, number][]>
+  ) {
     this.layer.clearLayers();
     const points: number[][] = [[SHOP_LOCATION.lat, SHOP_LOCATION.lng]];
 
@@ -148,12 +188,16 @@ export class Route {
     } else {
       for (const route of plan.routes) {
         const dim = highlight !== null && highlight !== route.jobCode;
-        const line = [[SHOP_LOCATION.lat, SHOP_LOCATION.lng], ...route.stops.map(s => [s.lat, s.lng])];
+        // มีเส้นทางตามถนนแล้ววาดตามถนน ยังไม่มีวาดเส้นตรง (เส้นประ = กำลังโหลดเส้นทางตามถนน)
+        const roadPath = paths[`${plan.key}|${route.jobCode}`];
+        const line = roadPath ?? [[SHOP_LOCATION.lat, SHOP_LOCATION.lng], ...route.stops.map(s => [s.lat, s.lng])];
+        const waiting = !roadPath && plan.distanceMode === 'road';
 
         L.polyline(line, {
           color: route.color,
           weight: highlight === route.jobCode ? 7 : 4,
-          opacity: dim ? 0.2 : 0.85
+          opacity: dim ? 0.2 : waiting ? 0.5 : 0.85,
+          dashArray: waiting ? '6 8' : undefined
         })
           .on('click', () => this.toggleHighlight(route.jobCode))
           .addTo(this.layer);
@@ -185,9 +229,42 @@ export class Route {
     }
   }
 
+  // โหลดเส้นทางตามถนนของทุกใบงานในแผน ทีละใบ (เว้นระยะระหว่างคำขอ) แล้ววาดแทนเส้นตรง
+  private async loadRoadPaths(plan: RoutePlan) {
+    const run = ++this.pathRun;
+    const total = plan.routes.length;
+    let done = 0;
+    let requested = false;
+    this.pathProgress.set({ done, total });
+
+    for (const route of plan.routes) {
+      const key = `${plan.key}|${route.jobCode}`;
+      const points = [SHOP_LOCATION, ...route.stops];
+      if (!this.roadPaths()[key]) {
+        const cached = this.roads.hasPath(points);
+        if (requested && !cached) {
+          await sleep(PATH_REQUEST_GAP_MS);
+        }
+        if (run !== this.pathRun) {
+          return; // เปลี่ยนแผน / ออกจากหน้าไปแล้ว
+        }
+        const path = await this.roads.roadPath(points);
+        if (run !== this.pathRun) {
+          return;
+        }
+        requested ||= !cached;
+        if (path) {
+          this.roadPaths.update(all => ({ ...all, [key]: path }));
+        }
+      }
+      done++;
+      this.pathProgress.set({ done, total });
+    }
+  }
+
   // ---------- ฟังก์ชันกดปุ่ม ----------
   // ครั้งแรก = คำนวณ, ครั้งต่อไป = คำนวณใหม่ (เสนอเส้นทางอื่นให้ดู)
-  calculateRoutes() {
+  async calculateRoutes() {
     const orders = this.orders();
 
     if (orders.length === 0) {
@@ -196,20 +273,28 @@ export class Route {
       return;
     }
 
+    this.computing.set(true);
+    // ขอระยะทางขับรถตามถนนจริงระหว่างร้านกับทุกบ้าน (ได้ null = บริการแผนที่ใช้ไม่ได้ -> ใช้เส้นตรง)
+    const roadLeg = await this.roads.roadDistances([SHOP_LOCATION, ...orders]);
+
     const state = this.deliveryService.routeState();
     const round = (state?.round ?? 0) + 1;
     const seen = new Set(state?.seenKeys ?? []);
 
-    const plans = this.planner.propose(orders, round, [...seen]);
+    const plans = this.planner.propose(orders, round, [...seen], roadLeg);
     void this.deliveryService.saveProposals(plans, round); // บันทึกแผน + ส่งใบงานให้ไรเดอร์
+    this.computing.set(false);
 
     this.highlight.set(null);
     this.errorMsg.set('');
-    this.notice.set(
-      round > 1 && plans.every(p => seen.has(p.key))
-        ? 'ลองคำนวณใหม่แล้ว แต่ไม่พบเส้นทางอื่นที่ต่างจากเดิม (ออเดอร์อาจน้อยเกินไป หรือแบบเดิมดีที่สุดแล้ว)'
-        : ''
-    );
+    const notes = [];
+    if (!roadLeg) {
+      notes.push('เชื่อมต่อบริการแผนที่ (OSRM) ไม่ได้ ระบบจึงคำนวณด้วยระยะทางเส้นตรงแทน ลองกดคำนวณใหม่อีกครั้งภายหลัง');
+    }
+    if (round > 1 && plans.every(p => seen.has(p.key))) {
+      notes.push('ลองคำนวณใหม่แล้ว แต่ไม่พบเส้นทางอื่นที่ต่างจากเดิม (ออเดอร์อาจน้อยเกินไป หรือแบบเดิมดีที่สุดแล้ว)');
+    }
+    this.notice.set(notes.join(' · '));
   }
 
   // ส่งใบงานไม่สำเร็จ -> กดส่งซ้ำ

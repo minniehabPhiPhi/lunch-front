@@ -173,6 +173,13 @@
   color: #c62828;
 }
 
+/* บอกว่าระยะทางคำนวณแบบไหน */
+.distance-source {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #4b6358;
+}
+
 /* ใบงานไรเดอร์ */
 .grid {
   display: grid;

@@ -15,6 +15,7 @@ import {
   RouteStrategy
 } from '../models/route.model';
 import { LatLng, SHOP_LOCATION, distanceKm } from '../utils/geo';
+import { LegDistance } from './road-network';
 import { formatTime } from '../utils/time';
 
 // วิธีจัดเส้นทางที่ระบบจะเสนอให้เลือกทุกครั้ง
@@ -64,16 +65,17 @@ function riderFees(boxes: number, distance: number) {
 }
 
 // วัดระยะทางและเวลาถึงของแต่ละจุด เมื่อไรเดอร์ออกจากร้าน 11:30 แล้วส่งตามลำดับ seq
-function measure(seq: readonly OrderInfo[]) {
+// leg = ระยะทางระหว่าง 2 จุด (ตามถนนจริง หรือเส้นตรงถ้าเรียกบริการแผนที่ไม่ได้)
+function measure(seq: readonly OrderInfo[], leg: LegDistance) {
   const legs: number[] = [];
   const arrivals: number[] = [];
   let prev: LatLng = SHOP_LOCATION;
   let total = 0;
 
   seq.forEach((order, i) => {
-    const leg = distanceKm(prev, order);
-    legs.push(leg);
-    total += leg;
+    const km = leg(prev, order);
+    legs.push(km);
+    total += km;
     // เวลาถึง = ออกเดินทาง + เวลาขับ + เวลายื่นของที่จุดก่อนหน้า (ปัดขึ้นเป็นนาที)
     arrivals.push(Math.ceil(DEPARTURE_MINUTES + (total / RIDER_SPEED_KMH) * 60 + DROP_OFF_MINUTES * i));
     prev = order;
@@ -87,8 +89,8 @@ function sumBoxes(seq: readonly OrderInfo[]): number {
 }
 
 // ค่าที่ต้องการให้ต่ำที่สุดของไรเดอร์ 1 คน ตามวิธีที่เลือก
-function valueOf(seq: readonly OrderInfo[], strategy: RouteStrategy): number {
-  const m = measure(seq);
+function valueOf(seq: readonly OrderInfo[], strategy: RouteStrategy, leg: LegDistance): number {
+  const m = measure(seq, leg);
   const late = m.arrivals.reduce((sum, t) => sum + Math.max(0, t - DEADLINE_MINUTES), 0);
 
   let base: number;
@@ -108,7 +110,7 @@ interface GroupSolution {
 }
 
 // หาลำดับส่งที่ดีที่สุดของกลุ่ม (กลุ่มละไม่เกิน 3 ออเดอร์ = ลองครบทุกลำดับได้เลย) พร้อมจำผลไว้
-function createSolver(strategy: RouteStrategy) {
+function createSolver(strategy: RouteStrategy, leg: LegDistance) {
   const cache = new Map<string, GroupSolution>();
 
   return (group: readonly OrderInfo[]): GroupSolution => {
@@ -119,7 +121,7 @@ function createSolver(strategy: RouteStrategy) {
     let solution = cache.get(key);
     if (!solution) {
       for (const seq of permutations(group)) {
-        const value = valueOf(seq, strategy);
+        const value = valueOf(seq, strategy, leg);
         if (!solution || value < solution.value - 1e-9) {
           solution = { seq, value };
         }
@@ -156,16 +158,16 @@ function sweepStart(orders: readonly OrderInfo[], groups: number): OrderInfo[][]
 }
 
 // เริ่มต้นแบบเกาะกลุ่ม: เอาออเดอร์ที่ไกลร้านสุดเป็นหัวกลุ่ม แล้วดึงออเดอร์ที่อยู่ใกล้ที่สุดมาร่วมทาง
-function clusterStart(orders: readonly OrderInfo[], groups: number): OrderInfo[][] {
+function clusterStart(orders: readonly OrderInfo[], groups: number, leg: LegDistance): OrderInfo[][] {
   const remaining = [...orders];
   const sizes = balancedSizes(orders.length, groups).sort((a, b) => b - a);
 
   return sizes.map(size => {
-    remaining.sort((a, b) => distanceKm(SHOP_LOCATION, b) - distanceKm(SHOP_LOCATION, a));
+    remaining.sort((a, b) => leg(SHOP_LOCATION, b) - leg(SHOP_LOCATION, a));
     const seed = remaining.shift()!;
     const group = [seed];
     while (group.length < size) {
-      remaining.sort((a, b) => distanceKm(seed, a) - distanceKm(seed, b));
+      remaining.sort((a, b) => leg(seed, a) - leg(seed, b));
       group.push(remaining.shift()!);
     }
     return group;
@@ -248,8 +250,8 @@ function planKey(seqs: readonly (readonly OrderInfo[])[]): string {
 
 // ---------- ประกอบแผน ----------
 
-function buildRoute(seq: readonly OrderInfo[], index: number): RiderRoute {
-  const m = measure(seq);
+function buildRoute(seq: readonly OrderInfo[], index: number, leg: LegDistance): RiderRoute {
+  const m = measure(seq, leg);
   const boxes = sumBoxes(seq);
   const fees = riderFees(boxes, m.distance);
   const distanceFee = Math.round(fees.distanceFee); // จ่ายเป็นบาทเต็ม
@@ -325,16 +327,24 @@ function sortAroundShop(seqs: OrderInfo[][]): OrderInfo[][] {
 export class RoutePlannerService {
   // เสนอแผนจัดเส้นทางหนึ่งชุด (ครั้งละหลายแบบให้เจ้าของร้านเลือก)
   // round 1 = คำนวณครั้งแรก, round 2, 3, ... = กด "คำนวณใหม่" (เริ่มจากจุดเริ่มต้นใหม่ และเลี่ยงแผนที่เคยเสนอแล้วใน seenKeys)
-  propose(orders: readonly OrderInfo[], round = 1, seenKeys: readonly string[] = []): RoutePlan[] {
+  // roadLeg = ระยะทางตามถนนจริง (จาก RoadNetworkService) ถ้าไม่ส่งมา จะใช้ระยะเส้นตรง
+  propose(
+    orders: readonly OrderInfo[],
+    round = 1,
+    seenKeys: readonly string[] = [],
+    roadLeg: LegDistance | null = null
+  ): RoutePlan[] {
     if (orders.length === 0) {
       return [];
     }
 
     const seen = new Set(seenKeys);
     const plans = new Map<string, RoutePlan>();
+    const leg = roadLeg ?? distanceKm;
+    const distanceMode = roadLeg ? 'road' : 'straight';
 
     STRATEGIES.forEach((strategy, strategyIndex) => {
-      const candidates = this.candidates(orders, strategy, strategyIndex, round);
+      const candidates = this.candidates(orders, strategy, strategyIndex, round, leg);
       const chosen = candidates.find(c => !seen.has(c.key)) ?? candidates[0];
 
       const existing = plans.get(chosen.key);
@@ -342,8 +352,8 @@ export class RoutePlannerService {
         existing.strategies.push(strategy); // หลายวิธีได้แผนเดียวกัน -> รวมเป็นแผนเดียว
         return;
       }
-      const routes = sortAroundShop(chosen.seqs).map((seq, i) => buildRoute(seq, i));
-      plans.set(chosen.key, { key: chosen.key, strategies: [strategy], routes, summary: summarize(routes) });
+      const routes = sortAroundShop(chosen.seqs).map((seq, i) => buildRoute(seq, i, leg));
+      plans.set(chosen.key, { key: chosen.key, strategies: [strategy], routes, summary: summarize(routes), distanceMode });
     });
 
     // แผนที่ส่งทันทุกจุดมาก่อน แล้วเรียงตามกำไรมากไปน้อย (ถ้ากำไรเท่ากันเอาแผนที่ส่งเสร็จเร็วกว่า)
@@ -356,10 +366,16 @@ export class RoutePlannerService {
   }
 
   // สร้างแผนผู้สมัครหลายแบบจากจุดเริ่มต้นต่างกัน เรียงจากดีที่สุดไปแย่สุด
-  private candidates(orders: readonly OrderInfo[], strategy: RouteStrategy, strategyIndex: number, round: number): Candidate[] {
+  private candidates(
+    orders: readonly OrderInfo[],
+    strategy: RouteStrategy,
+    strategyIndex: number,
+    round: number,
+    leg: LegDistance
+  ): Candidate[] {
     // จำนวนไรเดอร์ขั้นต่ำที่ต้องใช้ (คนละไม่เกิน 3 ออเดอร์)
     const riders = Math.ceil(orders.length / MAX_ORDERS_PER_RIDER);
-    const solve = createSolver(strategy);
+    const solve = createSolver(strategy, leg);
     const value = (group: readonly OrderInfo[]) => solve(group).value;
     const flexible = strategy === 'cheapest';
 
@@ -367,7 +383,7 @@ export class RoutePlannerService {
       round <= 1
         ? [
             sweepStart(orders, riders),
-            clusterStart(orders, riders),
+            clusterStart(orders, riders, leg),
             ...[1, 2, 3, 4].map(t => randomStart(orders, riders, createRandom(strategyIndex * 100 + t)))
           ]
         : Array.from({ length: 8 }, (_, t) =>

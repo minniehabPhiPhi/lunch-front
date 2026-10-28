@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { RoutePlannerService } from './route-planner';
 import { OrderInfo } from '../models/order.model';
 import { DEADLINE_MINUTES, DEPARTURE_MINUTES, MAX_ORDERS_PER_RIDER } from '../models/route.model';
-import { DELIVERY_RADIUS_KM, SHOP_LOCATION, randomPointInRadius } from '../utils/geo';
+import { DELIVERY_RADIUS_KM, SHOP_LOCATION, distanceKm, randomPointInRadius } from '../utils/geo';
 
 // ออเดอร์ทดสอบ (วางพิกัดเป็น กม. ทางทิศเหนือของร้าน)
 function orderAt(no: number, quantity: number, km: { north: number; east?: number }): OrderInfo {
@@ -132,6 +132,28 @@ describe('RoutePlannerService', () => {
     expect(plans.length).toBeGreaterThanOrEqual(1);
     for (let i = 1; i < plans.length; i++) {
       expect(plans[i - 1].summary.profit).toBeGreaterThanOrEqual(plans[i].summary.profit);
+    }
+  });
+
+  it('ไม่ส่งระยะทางตามถนนมา = ใช้ระยะเส้นตรง', () => {
+    const plans = planner.propose(randomOrders(9));
+    expect(plans.every(p => p.distanceMode === 'straight')).toBe(true);
+  });
+
+  it('ส่งระยะทางตามถนนมา -> ระยะทาง เวลา และค่าไรเดอร์คิดจากถนน', () => {
+    const orders = randomOrders(9);
+    const road = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => distanceKm(a, b) * 1.4; // ถนนอ้อมกว่าเส้นตรง 40%
+    const plan = planner.propose(orders, 1, [], road)[0];
+
+    expect(plan.distanceMode).toBe('road');
+    for (const r of plan.routes) {
+      // ระยะทางของไรเดอร์ = ผลรวมระยะตามถนน ร้าน -> จุดที่ 1 -> ... -> จุดสุดท้าย
+      const expected = r.stops.reduce(
+        (sum, s, i) => sum + road(i === 0 ? SHOP_LOCATION : r.stops[i - 1], s),
+        0
+      );
+      expect(r.distanceKm).toBeCloseTo(expected, 6);
+      expect(r.distanceFee).toBe(Math.round(2 * r.totalBoxes * expected));
     }
   });
 });
