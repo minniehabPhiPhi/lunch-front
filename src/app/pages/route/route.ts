@@ -17,9 +17,7 @@ import { OrderInfo } from '../../models/order.model';
 import {
   DEADLINE_MINUTES,
   MAX_ORDERS_PER_RIDER,
-  RoutePlan,
-  STRATEGY_HINTS,
-  STRATEGY_LABELS
+  RoutePlan
 } from '../../models/route.model';
 import { DELIVERY_RADIUS_KM, SHOP_LOCATION } from '../../utils/geo';
 import { SHOP_ICON } from '../../utils/map-icons';
@@ -51,8 +49,6 @@ export class Route {
   readonly orders = this.deliveryService.orders;
   readonly plan = this.deliveryService.plan;
   readonly planOutdated = this.deliveryService.planOutdated;
-  readonly proposals = computed(() => this.deliveryService.routeState()?.plans ?? []);
-  readonly selectedIndex = computed(() => this.deliveryService.routeState()?.selected ?? 0);
   readonly round = computed(() => this.deliveryService.routeState()?.round ?? 0);
   readonly totalBoxes = computed(() => this.orders().reduce((sum, o) => sum + o.quantity, 0));
 
@@ -216,11 +212,6 @@ export class Route {
     );
   }
 
-  selectPlan(index: number) {
-    void this.deliveryService.selectPlan(index);
-    this.highlight.set(null);
-  }
-
   // ส่งใบงานไม่สำเร็จ -> กดส่งซ้ำ
   retryPublish() {
     void this.deliveryService.publishJobs();
@@ -228,13 +219,5 @@ export class Route {
 
   toggleHighlight(jobCode: string) {
     this.highlight.update(current => (current === jobCode ? null : jobCode));
-  }
-
-  strategyLabel(plan: RoutePlan): string {
-    return plan.strategies.map(s => STRATEGY_LABELS[s]).join(' · ');
-  }
-
-  strategyHint(plan: RoutePlan): string {
-    return plan.strategies.map(s => STRATEGY_HINTS[s]).join(' / ');
   }
 }

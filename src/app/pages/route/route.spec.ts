@@ -54,7 +54,7 @@ describe('Route', () => {
     expect(service.plan()).toBeNull();
   });
 
-  it('คำนวณแล้วแสดงใบงานครบทุกไรเดอร์ พร้อมสรุปกำไรและทางเลือก', async () => {
+  it('คำนวณแล้วแสดงใบงานครบทุกไรเดอร์ พร้อมสรุปกำไร (ไม่มีส่วนทางเลือกเส้นทาง)', async () => {
     await loadData(randomApiData());
     await calculate();
 
@@ -62,7 +62,8 @@ describe('Route', () => {
     expect(plan).not.toBeNull();
     expect(el.querySelectorAll('.job').length).toBe(plan.routes.length);
     expect(el.querySelectorAll('.summary .sum-cell').length).toBe(6);
-    expect(el.querySelectorAll('.alt').length).toBe(component.proposals().length);
+    expect(el.querySelector('.alts')).toBeNull();
+    expect(el.textContent).not.toContain('ทางเลือกเส้นทางที่ระบบเสนอ');
     expect(el.querySelector('.map')?.classList).toContain('large');
   });
 
@@ -74,22 +75,6 @@ describe('Route', () => {
     await calculate();
     expect(component.round()).toBe(2);
     expect(el.querySelector('.btn-primary')?.textContent).toContain('คำนวณใหม่');
-  });
-
-  it('เลือกทางเลือกอื่นแล้วใบงานที่แสดงเปลี่ยนตาม', async () => {
-    await loadData(randomApiData());
-    await calculate();
-
-    const alts = Array.from(el.querySelectorAll<HTMLButtonElement>('.alt'));
-    const last = alts.length - 1;
-    alts[last].click();
-    await settle();
-    flushJobsPut(http);
-    await settle();
-    await fixture.whenStable();
-
-    expect(service.routeState()?.selected).toBe(last);
-    expect(el.querySelectorAll('.job').length).toBe(service.plan()!.routes.length);
   });
 
   it('เตือนเมื่อแผนขาดทุน (ลูกค้า 1 กล่อง ไกล 10 กม.)', async () => {

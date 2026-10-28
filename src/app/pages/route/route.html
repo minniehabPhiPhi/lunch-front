@@ -72,12 +72,12 @@
       </div>
     } @else {
       <div class="error">
-        มี {{ p.summary.lateStops }} จุดที่ส่งถึงหลัง 12:30 น. — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นด้านล่าง
+        มี {{ p.summary.lateStops }} จุดที่ส่งถึงหลัง 12:30 น. — กด "คำนวณใหม่" เพื่อหาเส้นทางอื่น
       </div>
     }
     @if (p.summary.profit < 0) {
       <div class="error">
-        แผนนี้ <b>ขาดทุน {{ abs(p.summary.profit) | number:'1.0-0' }} ฿</b> — กด "คำนวณใหม่" หรือเลือกทางเลือกอื่นเพื่อหาเส้นทางที่ไม่ขาดทุน
+        แผนนี้ <b>ขาดทุน {{ abs(p.summary.profit) | number:'1.0-0' }} ฿</b> — กด "คำนวณใหม่" เพื่อหาเส้นทางที่ไม่ขาดทุน
       </div>
     }
 
@@ -116,28 +116,6 @@
         <small>รายได้ − ต้นทุนข้าว − ค่าไรเดอร์</small>
       </div>
     </div>
-
-    <!-- ทางเลือกเส้นทางที่ระบบเสนอ -->
-    <h4 class="list-title">ทางเลือกเส้นทางที่ระบบเสนอ (ชุดที่ {{ round() }})</h4>
-    <div class="alts">
-      @for (alt of proposals(); track alt.key; let i = $index) {
-        <button class="alt" [class.selected]="i === selectedIndex()" (click)="selectPlan(i)">
-          <span class="alt-title">
-            {{ strategyLabel(alt) }}
-            @if (i === 0) {
-              <span class="tag">แนะนำ</span>
-            }
-          </span>
-          <b [class.green]="alt.summary.profit >= 0" [class.red]="alt.summary.profit < 0">
-            {{ alt.summary.profit >= 0 ? 'กำไร' : 'ขาดทุน' }} {{ abs(alt.summary.profit) | number }} ฿
-          </b>
-          <small>
-            {{ alt.summary.riders }} คน · {{ alt.summary.distanceKm | number:'1.1-1' }} กม. · ส่งเสร็จ {{ alt.summary.lastArrivalTime }}
-          </small>
-        </button>
-      }
-    </div>
-    <p class="hint">{{ strategyHint(p) }}</p>
 
     <!-- รายการใบงานที่ระบบแบ่งให้ไรเดอร์ -->
     <div class="grid">

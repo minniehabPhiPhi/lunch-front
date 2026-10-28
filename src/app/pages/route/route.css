@@ -173,51 +173,6 @@
   color: #c62828;
 }
 
-/* ทางเลือกเส้นทาง */
-.list-title {
-  margin-bottom: 10px;
-  color: #555;
-}
-
-.alts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.alt {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding: 10px 12px;
-  background: #fafafa;
-  border: 2px solid #eee;
-  border-radius: 10px;
-  text-align: left;
-  cursor: pointer;
-}
-
-.alt.selected {
-  border-color: #2e7d5b;
-  background: #e7f4ec;
-}
-
-.alt-title {
-  font-weight: bold;
-  color: #333;
-}
-
-.tag {
-  margin-left: 4px;
-  padding: 1px 6px;
-  background: #2e7d5b;
-  color: white;
-  border-radius: 10px;
-  font-size: 11px;
-}
-
 /* ใบงานไรเดอร์ */
 .grid {
   display: grid;
