@@ -24,6 +24,14 @@ const STRATEGIES: RouteStrategy[] = ['cheapest', 'shortest', 'fastest'];
 // โทษต่อ 1 นาทีที่ส่งเลย 12:30 (ใหญ่มาก = ระบบจะเลี่ยงแผนที่ส่งไม่ทันเสมอ)
 const LATE_PENALTY = 10_000;
 
+// กด "คำนวณใหม่" แล้วแผนใหม่ต้องมีออเดอร์อย่างน้อย 40% ที่ย้ายไปอยู่กับไรเดอร์ชุดใหม่ (เทียบกับแผนที่เพิ่งเห็น)
+// ถ้าหาแผนที่ต่างขนาดนี้ไม่ได้ (เช่น ออเดอร์น้อยมาก) จะเลือกแผนที่ต่างจากเดิมมากที่สุดแทน
+export const MIN_CHANGE_RATIO = 0.4;
+
+// ตอนคำนวณใหม่: ถ้ากลุ่มไหนมีบ้านคู่ที่เคยอยู่ไรเดอร์คนเดียวกันในแผนเดิม ให้ดูแย่ลง 15% ต่อคู่
+// (ใช้ระหว่างค้นหาเท่านั้น เพื่อดันให้ไปเจอการจับกลุ่มแบบใหม่ ส่วนค่าจริงของแผนยังคิดตามปกติ)
+const DIVERSITY_WEIGHT = 0.15;
+
 // ---------- ตัวช่วยเล็ก ๆ ----------
 
 // ตัวสุ่มที่กำหนด seed ได้ (mulberry32) -> ผลคำนวณซ้ำได้ ทดสอบง่าย
@@ -248,6 +256,42 @@ function planKey(seqs: readonly (readonly OrderInfo[])[]): string {
   return seqs.map(seq => seq.map(o => o.id).join('>')).sort().join('|');
 }
 
+// ---------- เปรียบเทียบกับแผนก่อนหน้า ----------
+
+// ชุดออเดอร์ของไรเดอร์ 1 คน (เรียงรหัสแล้ว ใช้เทียบว่าเป็นกลุ่มเดียวกันไหม ไม่สนลำดับส่ง)
+function groupKey(orderIds: readonly string[]): string {
+  return [...orderIds].sort().join(',');
+}
+
+// สัดส่วนออเดอร์ที่ไปอยู่กับกลุ่มใหม่ เทียบกับแผนเดิม (0 = เหมือนเดิมทุกกลุ่ม, 1 = เปลี่ยนทั้งหมด)
+export function changeRatio(prevGroups: readonly (readonly string[])[], nextGroups: readonly (readonly string[])[]): number {
+  const groupOf = (groups: readonly (readonly string[])[]) => {
+    const map = new Map<string, string>();
+    for (const g of groups) {
+      const key = groupKey(g);
+      g.forEach(id => map.set(id, key));
+    }
+    return map;
+  };
+  const before = groupOf(prevGroups);
+  const after = groupOf(nextGroups);
+  if (after.size === 0) {
+    return 0;
+  }
+  let moved = 0;
+  after.forEach((key, id) => {
+    if (before.get(id) !== key) {
+      moved++;
+    }
+  });
+  return moved / after.size;
+}
+
+// เลขลำดับไรเดอร์จากรหัสใบงาน: "JOB-03" -> 2
+function labelIndexOf(jobCode: string): number {
+  return Number(jobCode.replace(/\D/g, '')) - 1;
+}
+
 // ---------- ประกอบแผน ----------
 
 function buildRoute(seq: readonly OrderInfo[], index: number, leg: LegDistance): RiderRoute {
@@ -310,7 +354,51 @@ function summarize(routes: readonly RiderRoute[]): PlanSummary {
   };
 }
 
-// ตั้งเลขใบงานเรียงตามทิศทางรอบร้าน (JOB-01, 02, ... อยู่ติดกันตามแผนที่)
+// ตั้งเลขใบงาน + สี ให้ไรเดอร์แต่ละคน
+// - ไม่มีแผนเดิม: เรียงตามทิศทางรอบร้าน (JOB-01, 02, ... อยู่ติดกันตามแผนที่)
+// - มีแผนเดิม (กดคำนวณใหม่): กลุ่มที่ส่งบ้านชุดเดิมทุกจุด ใช้เลขใบงานและสีเดิม
+//   กลุ่มที่เปลี่ยนได้เลขที่ว่างอยู่ (เรียงตามทิศ) และถูกทำเครื่องหมาย changed
+function labelRoutes(seqs: OrderInfo[][], previous: RoutePlan | null, leg: LegDistance): RiderRoute[] {
+  const ordered = sortAroundShop(seqs);
+  const labelOf = new Map<number, number>(); // ลำดับกลุ่ม -> เลขไรเดอร์ (0 = JOB-01)
+  const used = new Set<number>();
+
+  if (previous) {
+    const previousLabel = new Map(
+      previous.routes.map(r => [groupKey(r.stops.map(s => s.orderId)), labelIndexOf(r.jobCode)])
+    );
+    ordered.forEach((seq, i) => {
+      const label = previousLabel.get(groupKey(seq.map(o => o.id)));
+      if (label !== undefined && !used.has(label)) {
+        labelOf.set(i, label);
+        used.add(label);
+      }
+    });
+  }
+
+  let next = 0;
+  ordered.forEach((_, i) => {
+    if (!labelOf.has(i)) {
+      while (used.has(next)) {
+        next++;
+      }
+      labelOf.set(i, next);
+      used.add(next);
+    }
+  });
+
+  return ordered
+    .map((seq, i) => {
+      const route = buildRoute(seq, labelOf.get(i)!, leg);
+      const kept = previous !== null && previous.routes.some(
+        r => r.jobCode === route.jobCode && groupKey(r.stops.map(s => s.orderId)) === groupKey(seq.map(o => o.id))
+      );
+      return { ...route, changed: previous !== null && !kept };
+    })
+    .sort((a, b) => a.jobCode.localeCompare(b.jobCode));
+}
+
+// เรียงกลุ่มตามทิศทางรอบร้าน (ใช้ตั้งเลขใบงานให้อยู่ติดกันตามแผนที่)
 function sortAroundShop(seqs: OrderInfo[][]): OrderInfo[][] {
   const cosLat = Math.cos((SHOP_LOCATION.lat * Math.PI) / 180);
   const angle = (seq: readonly OrderInfo[]) => {
@@ -328,11 +416,13 @@ export class RoutePlannerService {
   // เสนอแผนจัดเส้นทางหนึ่งชุด (ครั้งละหลายแบบให้เจ้าของร้านเลือก)
   // round 1 = คำนวณครั้งแรก, round 2, 3, ... = กด "คำนวณใหม่" (เริ่มจากจุดเริ่มต้นใหม่ และเลี่ยงแผนที่เคยเสนอแล้วใน seenKeys)
   // roadLeg = ระยะทางตามถนนจริง (จาก RoadNetworkService) ถ้าไม่ส่งมา จะใช้ระยะเส้นตรง
+  // previous = แผนที่เจ้าของร้านเห็นอยู่ก่อนกดคำนวณใหม่ (ใช้บังคับให้แผนใหม่ต่างจากเดิม และคงเลข/สีของเส้นทางที่ไม่เปลี่ยน)
   propose(
     orders: readonly OrderInfo[],
     round = 1,
     seenKeys: readonly string[] = [],
-    roadLeg: LegDistance | null = null
+    roadLeg: LegDistance | null = null,
+    previous: RoutePlan | null = null
   ): RoutePlan[] {
     if (orders.length === 0) {
       return [];
@@ -342,17 +432,27 @@ export class RoutePlannerService {
     const plans = new Map<string, RoutePlan>();
     const leg = roadLeg ?? distanceKm;
     const distanceMode = roadLeg ? 'road' : 'straight';
+    const previousGroups = previous?.routes.map(r => r.stops.map(s => s.orderId)) ?? null;
 
     STRATEGIES.forEach((strategy, strategyIndex) => {
-      const candidates = this.candidates(orders, strategy, strategyIndex, round, leg);
-      const chosen = candidates.find(c => !seen.has(c.key)) ?? candidates[0];
+      const candidates = this.candidates(orders, strategy, strategyIndex, round, leg, previousGroups);
+      const unseen = candidates.filter(c => !seen.has(c.key));
+      let chosen = unseen[0] ?? candidates[0];
+
+      if (previousGroups && unseen.length > 0) {
+        // แผนที่ดีที่สุดที่ต่างจากแผนเดิมพอ (candidates เรียงจากดีไปแย่อยู่แล้ว)
+        const ratio = new Map(unseen.map(c => [c, changeRatio(previousGroups, c.seqs.map(seq => seq.map(o => o.id)))]));
+        chosen =
+          unseen.find(c => ratio.get(c)! >= MIN_CHANGE_RATIO) ??
+          unseen.reduce((best, c) => (ratio.get(c)! > ratio.get(best)! ? c : best));
+      }
 
       const existing = plans.get(chosen.key);
       if (existing) {
         existing.strategies.push(strategy); // หลายวิธีได้แผนเดียวกัน -> รวมเป็นแผนเดียว
         return;
       }
-      const routes = sortAroundShop(chosen.seqs).map((seq, i) => buildRoute(seq, i, leg));
+      const routes = labelRoutes(chosen.seqs, previous, leg);
       plans.set(chosen.key, { key: chosen.key, strategies: [strategy], routes, summary: summarize(routes), distanceMode });
     });
 
@@ -371,13 +471,27 @@ export class RoutePlannerService {
     strategy: RouteStrategy,
     strategyIndex: number,
     round: number,
-    leg: LegDistance
+    leg: LegDistance,
+    previousGroups: readonly (readonly string[])[] | null = null
   ): Candidate[] {
     // จำนวนไรเดอร์ขั้นต่ำที่ต้องใช้ (คนละไม่เกิน 3 ออเดอร์)
     const riders = Math.ceil(orders.length / MAX_ORDERS_PER_RIDER);
     const solve = createSolver(strategy, leg);
     const value = (group: readonly OrderInfo[]) => solve(group).value;
     const flexible = strategy === 'cheapest';
+
+    // บ้านคู่ที่เคยอยู่ไรเดอร์คนเดียวกันในแผนเดิม
+    const pairKey = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`);
+    const oldPairs = new Set<string>();
+    for (const g of previousGroups ?? []) {
+      g.forEach((a, i) => g.slice(i + 1).forEach(b => oldPairs.add(pairKey(a, b))));
+    }
+    // ค่าที่ใช้ระหว่างค้นหาแผนใหม่: กลุ่มที่ซ้ำคู่เดิมดูแย่ลง
+    const diverseValue = (group: readonly OrderInfo[]) => {
+      let repeated = 0;
+      group.forEach((a, i) => group.slice(i + 1).forEach(b => (repeated += oldPairs.has(pairKey(a.id, b.id)) ? 1 : 0)));
+      return value(group) * (1 + DIVERSITY_WEIGHT * repeated);
+    };
 
     const starts =
       round <= 1
@@ -386,14 +500,16 @@ export class RoutePlannerService {
             clusterStart(orders, riders, leg),
             ...[1, 2, 3, 4].map(t => randomStart(orders, riders, createRandom(strategyIndex * 100 + t)))
           ]
-        : Array.from({ length: 8 }, (_, t) =>
+        : Array.from({ length: 12 }, (_, t) =>
             randomStart(orders, riders, createRandom(round * 1000 + strategyIndex * 100 + t))
           );
 
     return starts
-      .map(start => {
+      .map((start, t) => {
         const groups = start.map(g => [...g]);
-        while (applyImprovement(groups, value, flexible)) {
+        // คำนวณใหม่: 2 ใน 3 ของจุดเริ่มค้นหาแบบหลีกเลี่ยงคู่เดิม ที่เหลือค้นหาแบบปกติ
+        const searchValue = oldPairs.size > 0 && t % 3 !== 2 ? diverseValue : value;
+        while (applyImprovement(groups, searchValue, flexible)) {
           // วนปรับจนไม่มีอะไรทำให้ดีขึ้นอีก
         }
         const solutions = groups.filter(g => g.length > 0).map(solve);

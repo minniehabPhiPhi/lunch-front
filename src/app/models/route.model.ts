@@ -54,6 +54,7 @@ export interface RiderRoute {
   cost: number; // ค่าไรเดอร์รวม = tripFee + distanceFee
   onTime: boolean; // ทุกจุดถึงไม่เกิน 12:30 หรือไม่
   stops: RouteStop[];
+  changed?: boolean; // กดคำนวณใหม่แล้วกลุ่มนี้ต่างจากแผนเดิม (false = บ้านชุดเดิม ใช้เลขใบงานและสีเดิม)
 }
 
 // สรุปภาพรวมของแผน (ใช้ดูกำไร/ขาดทุน และเวลา)

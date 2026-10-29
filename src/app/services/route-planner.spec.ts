@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { RoutePlannerService } from './route-planner';
+import { MIN_CHANGE_RATIO, RoutePlannerService, changeRatio } from './route-planner';
 import { OrderInfo } from '../models/order.model';
 import { DEADLINE_MINUTES, DEPARTURE_MINUTES, MAX_ORDERS_PER_RIDER } from '../models/route.model';
 import { DELIVERY_RADIUS_KM, SHOP_LOCATION, distanceKm, randomPointInRadius } from '../utils/geo';
@@ -155,5 +155,58 @@ describe('RoutePlannerService', () => {
       expect(r.distanceKm).toBeCloseTo(expected, 6);
       expect(r.distanceFee).toBe(Math.round(2 * r.totalBoxes * expected));
     }
+  });
+
+  describe('กด "คำนวณใหม่"', () => {
+    // ออเดอร์วางเป็นเกลียวรอบร้าน (ตำแหน่งตายตัว ผลทดสอบไม่สุ่ม)
+    const spiralOrders = (count: number) =>
+      Array.from({ length: count }, (_, i) => {
+        const r = 0.4 + (2.5 * (i + 1)) / count;
+        const a = i * 2.39996; // มุมทองคำ กระจายทั่ววง
+        return orderAt(i + 1, (i % 3) + 1, { north: r * Math.cos(a), east: r * Math.sin(a) });
+      });
+    const groupsOf = (plan: { routes: { stops: { orderId: string }[] }[] }) =>
+      plan.routes.map(r => r.stops.map(s => s.orderId));
+
+    it('วัดสัดส่วนออเดอร์ที่ย้ายกลุ่มได้ถูกต้อง', () => {
+      expect(changeRatio([['A', 'B'], ['C', 'D']], [['B', 'A'], ['D', 'C']])).toBe(0); // แค่สลับลำดับส่ง = ไม่เปลี่ยน
+      expect(changeRatio([['A', 'B'], ['C', 'D']], [['A', 'C'], ['B', 'D']])).toBe(1);
+      expect(changeRatio([['A', 'B'], ['C'], ['D']], [['A', 'B'], ['C', 'D']])).toBe(0.5);
+    });
+
+    for (const count of [14, 28]) {
+      it(`${count} ออเดอร์: แผนใหม่ต่างจากแผนที่เพิ่งเห็นอย่างน้อย ${MIN_CHANGE_RATIO * 100}% และยังส่งทันทุกจุด`, () => {
+        const orders = spiralOrders(count);
+        let previous = planner.propose(orders, 1)[0];
+        const seen = [previous.key];
+        for (let round = 2; round <= 4; round++) {
+          const next = planner.propose(orders, round, seen, null, previous)[0];
+          expect(changeRatio(groupsOf(previous), groupsOf(next))).toBeGreaterThanOrEqual(MIN_CHANGE_RATIO);
+          expect(next.summary.allOnTime).toBe(true);
+          seen.push(next.key);
+          previous = next;
+        }
+      });
+    }
+
+    it('เส้นทางที่ส่งบ้านชุดเดิม ใช้เลขใบงานและสีเดิม ส่วนที่เปลี่ยนถูกทำเครื่องหมาย', () => {
+      const orders = spiralOrders(14);
+      const previous = planner.propose(orders, 1)[0];
+      const next = planner.propose(orders, 2, [previous.key], null, previous)[0];
+
+      const before = new Map(previous.routes.map(r => [r.stops.map(s => s.orderId).sort().join(','), r]));
+      for (const r of next.routes) {
+        const same = before.get(r.stops.map(s => s.orderId).sort().join(','));
+        if (same) {
+          expect(r.jobCode).toBe(same.jobCode);
+          expect(r.color).toBe(same.color);
+          expect(r.changed).toBe(false);
+        } else {
+          expect(r.changed).toBe(true);
+        }
+      }
+      expect(next.routes.some(r => r.changed)).toBe(true);
+      expect(new Set(next.routes.map(r => r.jobCode)).size).toBe(next.routes.length); // รหัสใบงานไม่ซ้ำกัน
+    });
   });
 });

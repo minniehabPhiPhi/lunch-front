@@ -281,7 +281,9 @@ export class Route {
     const round = (state?.round ?? 0) + 1;
     const seen = new Set(state?.seenKeys ?? []);
 
-    const plans = this.planner.propose(orders, round, [...seen], roadLeg);
+    // แผนที่เห็นอยู่ตอนนี้: แผนใหม่ต้องต่างจากแผนนี้ และเส้นทางที่ไม่เปลี่ยนจะใช้เลขใบงาน/สีเดิม
+    const previous = this.plan();
+    const plans = this.planner.propose(orders, round, [...seen], roadLeg, previous);
     void this.deliveryService.saveProposals(plans, round); // บันทึกแผน + ส่งใบงานให้ไรเดอร์
     this.computing.set(false);
 
